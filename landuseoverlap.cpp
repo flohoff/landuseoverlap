@@ -56,6 +56,9 @@
 // This will work for all input files keeping the index in memory.
 #include <osmium/index/map/flex_mem.hpp>
 
+#include <gdalcpp.hpp>
+#include <boost/program_options.hpp>
+
 #include <spatialindex/capi/sidx_api.h>
 #include <SpatialIndex.h>
 namespace si = SpatialIndex;
@@ -66,7 +69,7 @@ using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, 
 // The location handler always depends on the index type
 using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
-#define DEBUG 1
+#define DEBUG 0
 
 
 uint64_t	globalid=0;
@@ -81,11 +84,11 @@ class myArea {
 	std::unique_ptr<const OGRGeometry>	geometry;
 	uint64_t				areaid;
 
-	uint8_t					osmsrc;
+	uint8_t					osmtype;
 	osmium::object_id_type			osmid;
 
 
-	myArea(std::unique_ptr<OGRGeometry> geom, uint8_t osrc, osmium::object_id_type oid) : geometry(std::move(geom)), osmsrc(osrc), osmid(oid) {
+	myArea(std::unique_ptr<OGRGeometry> geom, uint8_t otype, osmium::object_id_type oid) : geometry(std::move(geom)), osmtype(otype), osmid(oid) {
 		areaid=globalid++;
 	}
 
@@ -101,8 +104,74 @@ class myArea {
 		return geometry->Overlaps(oa->geometry.get());
 	}
 
+	const char *type(void ) {
+		return (osmtype == SRC_WAY) ? "way" : "relation";
+	}
+
 	void dump(void ) {
-		std::cout << " Dump of area id " << areaid << " from OSM id " << osmid << " type " << (int) osmsrc << std::endl;
+		std::cout << " Dump of area id " << areaid << " from OSM id " << osmid << " type " << (int) osmtype << std::endl;
+	}
+};
+
+class SpatiaLiteWriter : public osmium::handler::Handler {
+    gdalcpp::Layer		*m_layer_overlap;
+    gdalcpp::Dataset		dataset;
+    osmium::geom::OGRFactory<>	m_factory{};
+public:
+    explicit SpatiaLiteWriter(std::string &dbname) :
+	dataset("sqlite", dbname, gdalcpp::SRS{}, {  "SPATIALITE=TRUE", "INIT_WITH_EPSG=no" }) {
+
+		m_layer_overlap=new gdalcpp::Layer(dataset, "overlap", wkbMultiPolygon);
+
+		dataset.exec("PRAGMA synchronous = OFF");
+
+		m_layer_overlap->add_field("area1_id", OFTString, 20);
+		m_layer_overlap->add_field("area1_type", OFTString, 20);
+		m_layer_overlap->add_field("area1_changeset", OFTString, 20);
+
+		m_layer_overlap->add_field("area2_id", OFTString, 20);
+		m_layer_overlap->add_field("area2_type", OFTString, 20);
+		m_layer_overlap->add_field("area2_changeset", OFTString, 20);
+	}
+
+	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
+		if (!a || !b || a->geometry == nullptr || b->geometry == nullptr)
+			return nullptr;
+
+		std::unique_ptr<OGRGeometry> intersection{a->geometry->Intersection(b->geometry.get())};
+
+		if (!intersection)
+			return nullptr;
+
+		if (intersection->getGeometryType() == wkbMultiPolygon)
+			return std::move(intersection);
+
+		std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon};
+		mpoly->addGeometryDirectly(intersection.release());
+
+		return std::move(mpoly);
+
+	}
+
+	void write_overlap(myArea *a, myArea *b) {
+		std::unique_ptr<OGRGeometry> intersection=make_intersection_mpoly(a, b);
+
+		if (!intersection)
+			return;
+
+		if (DEBUG)
+			std::cout << "OGR Type " << intersection->getGeometryName() << std::endl;
+
+		try  {
+			gdalcpp::Feature feature{*m_layer_overlap, std::move(intersection)};
+			feature.set_field("area1_id", static_cast<double>(a->osmid));
+			feature.set_field("area1_type", a->type());
+			feature.set_field("area2_id", static_cast<double>(b->osmid));
+			feature.set_field("area2_type", b->type());
+			feature.add_to_layer();
+		} catch (gdalcpp::gdal_error) {
+			std::cout << "gdal_error while creating feature " << std::endl;
+		}
 	}
 };
 
@@ -249,7 +318,21 @@ public:
 		}
 	}
 };
+
+namespace po = boost::program_options;
+
 int main(int argc, char* argv[]) {
+
+	po::options_description         desc("Allowed options");
+        desc.add_options()
+                ("help,h", "produce help message")
+                ("infile,i", po::value<std::string>(), "Input file")
+		("dbname,d", po::value<std::string>(), "Output database name")
+        ;
+        po::variables_map vm;
+        po::store(po::parse_command_line(argc, argv, desc), vm);
+	po::notify(vm);
+
     // Initialize an empty DynamicHandler. Later it will be associated
     // with one of the handlers. You can think of the DynamicHandler as
     // a kind of "variant handler" or a "pointer handler" pointing to the
@@ -257,7 +340,7 @@ int main(int argc, char* argv[]) {
     osmium::handler::DynamicHandler handler;
     handler.set<OGRGen>();
 
-    osmium::io::File input_file{argv[1]};
+    osmium::io::File input_file{vm["infile"].as<std::string>()};
 
     // Configuration for the multipolygon assembler. Here the default settings
     // are used, but you could change multiple settings.
@@ -266,8 +349,9 @@ int main(int argc, char* argv[]) {
     // Set up a filter matching only forests. This will be used to only build
     // areas with matching tags.
     osmium::TagsFilter filter{false};
-    filter.add_rule(true, "landuse", "forest");
-    filter.add_rule(true, "natural", "wood");
+    filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
+	//filter.add_rule(true, "landuse", "forest");
+	//filter.add_rule(true, "natural", "wood");
 
     // Initialize the MultipolygonManager. Its job is to collect all
     // relations and member ways needed for each area. It then calls an
@@ -332,6 +416,10 @@ int main(int argc, char* argv[]) {
         std::cerr << "\n";
     }
 
+	OGRRegisterAll();
+	std::string		dbname=vm["dbname"].as<std::string>();
+	SpatiaLiteWriter	writer{dbname};
+
 	for(auto ma : arealist) {
 		std::vector<myArea*>	list;
 		if (DEBUG)
@@ -354,10 +442,13 @@ int main(int argc, char* argv[]) {
 				std::cout << "\t\tChecking against " << oa->osmid << std::endl;
 
 			if (oa->overlaps(ma)) {
-				if (DEBUG)
+				if (DEBUG) {
 					std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
-				ma->dump();
-				oa->dump();
+					ma->dump();
+					oa->dump();
+				}
+
+				writer.write_overlap(ma, oa);
 			}
 		}
 	}
