@@ -1,0 +1,40 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<osm version='0.6' generator='JOSM'>
+  <bounds minlat='52.1964021' minlon='9.355545' maxlat='52.1990851' maxlon='9.3606091' origin='CGImap 0.6.0 (27598 thorn-03.openstreetmap.org)' />
+  <node id='39142' user='flohoff' version='1' changeset='1' lat='52.19849760307' lon='9.35881070302' />
+  <node id='39143' user='flohoff' version='1' changeset='1' lat='52.19898905063' lon='9.35980256899' />
+  <node id='39144' user='flohoff' version='1' changeset='1' lat='52.19871238453' lon='9.36040837934' />
+  <node id='39145' user='flohoff' version='1' changeset='1' lat='52.19811900273' lon='9.35958281425' />
+  <node id='40222' user='flohoff' version='1' changeset='1' lat='52.19774950024' lon='9.35661018601' />
+  <node id='40223' user='flohoff' version='1' changeset='1' lat='52.19824095607' lon='9.35760205198' />
+  <node id='40225' user='flohoff' version='1' changeset='1' lat='52.19796428531' lon='9.35820786233' />
+  <node id='40227' user='flohoff' version='1' changeset='1' lat='52.19737089352' lon='9.35738229724' />
+  <node id='40230' user='flohoff' version='1' changeset='1' lat='52.19785871312' lon='9.35750108359' />
+  <node id='40231' user='flohoff' version='1' changeset='1' lat='52.19716338655' lon='9.35794653237' />
+  <node id='40233' user='flohoff' version='1' changeset='1' lat='52.19757111863' lon='9.35867706838' />
+  <node id='40235' user='flohoff' version='1' changeset='1' lat='52.19790603861' lon='9.35780398876' />
+  <way id='100' version='1'>
+    <nd ref='39142' />
+    <nd ref='39143' />
+    <nd ref='39144' />
+    <nd ref='39145' />
+    <nd ref='39142' />
+    <tag k='landuse' v='meadow' />
+  </way>
+  <way id='201' version='1'>
+    <nd ref='40222' />
+    <nd ref='40223' />
+    <nd ref='40225' />
+    <nd ref='40227' />
+    <nd ref='40222' />
+    <tag k='landuse' v='meadow' />
+  </way>
+  <way id='202' version='1'>
+    <nd ref='40230' />
+    <nd ref='40231' />
+    <nd ref='40233' />
+    <nd ref='40235' />
+    <nd ref='40230' />
+    <tag k='landuse' v='meadow' />
+  </way>
+</osm>

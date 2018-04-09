@@ -1,0 +1,365 @@
+/*
+
+  EXAMPLE osmium_area_test
+
+  Create multipolygons from OSM data and dump them to stdout in one of two
+  formats: WKT or using the built-in Dump format.
+
+  DEMONSTRATES USE OF:
+  * file input
+  * location indexes and the NodeLocationsForWays handler
+  * the MultipolygonManager and Assembler to assemble areas (multipolygons)
+  * your own handler that works with areas (multipolygons)
+  * the WKTFactory to write geometries in WKT format
+  * the Dump handler
+  * the DynamicHandler
+
+  SIMPLER EXAMPLES you might want to understand first:
+  * osmium_read
+  * osmium_count
+  * osmium_debug
+  * osmium_amenity_list
+
+  LICENSE
+  The code in this example file is released into the Public Domain.
+
+*/
+
+#include <cstdlib>  // for std::exit
+#include <cstring>  // for std::strcmp
+#include <iostream> // for std::cout, std::cerr
+
+// For assembling multipolygons
+#include <osmium/area/assembler.hpp>
+#include <osmium/area/multipolygon_manager.hpp>
+
+// For the DynamicHandler class
+#include <osmium/dynamic_handler.hpp>
+
+// For the WKT factory
+#include <osmium/geom/wkt.hpp>
+#include <osmium/geom/ogr.hpp>
+
+// For the Dump handler
+#include <osmium/handler/dump.hpp>
+
+// For the NodeLocationForWays handler
+#include <osmium/handler/node_locations_for_ways.hpp>
+
+// Allow any format of input files (XML, PBF, ...)
+#include <osmium/io/any_input.hpp>
+
+// For osmium::apply()
+#include <osmium/visitor.hpp>
+
+// For the location index. There are different types of indexes available.
+// This will work for all input files keeping the index in memory.
+#include <osmium/index/map/flex_mem.hpp>
+
+#include <spatialindex/capi/sidx_api.h>
+#include <SpatialIndex.h>
+namespace si = SpatialIndex;
+
+// The type of index used. This must match the include file above
+using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, osmium::Location>;
+
+// The location handler always depends on the index type
+using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
+
+#define DEBUG 1
+
+
+uint64_t	globalid=0;
+
+enum {
+	SRC_RELATION,
+	SRC_WAY
+};
+
+class myArea {
+	public:
+	std::unique_ptr<const OGRGeometry>	geometry;
+	uint64_t				areaid;
+
+	uint8_t					osmsrc;
+	osmium::object_id_type			osmid;
+
+
+	myArea(std::unique_ptr<OGRGeometry> geom, uint8_t osrc, osmium::object_id_type oid) : geometry(std::move(geom)), osmsrc(osrc), osmid(oid) {
+		areaid=globalid++;
+	}
+
+	uint64_t id(void ) {
+		return areaid;
+	}
+
+	void envelope(OGREnvelope& env) {
+		geometry->getEnvelope(&env);
+	}
+
+	bool overlaps(myArea *oa) {
+		return geometry->Overlaps(oa->geometry.get());
+	}
+
+	void dump(void ) {
+		std::cout << " Dump of area id " << areaid << " from OSM id " << osmid << " type " << (int) osmsrc << std::endl;
+	}
+};
+
+
+template <typename AT>
+class query_visitor : public si::IVisitor {
+   std::vector<AT*>	*list;
+   public:
+   query_visitor(std::vector<AT*> *l) : list(l), m_io_index(0), m_io_leaf(0), m_io_found(0) {}
+
+    void visitNode(si::INode const& n)
+    {
+        n.isLeaf() ? ++m_io_leaf : ++m_io_index;
+    }
+
+    void visitData(si::IData const& d)
+    {
+        //si::IShape* ps = nullptr;
+        //d.getShape(&ps);
+        //std::unique_ptr<si::IShape> shape(ps);
+        //; // use shape
+
+        // Region is represented as array of characters
+        uint8_t* pd = 0;
+        uint32_t size = 0;
+        d.getData(size, &pd);
+
+	AT	*ptr;
+	memcpy(&ptr, pd, sizeof(AT *));
+
+	list->push_back(ptr);
+	delete[] pd;
+
+        //std::unique_ptr<uint8_t[]> data(pd);
+        // use data
+        //std::string str(reinterpret_cast<char*>(pd));
+
+	//std::cout << "Overlap " << d.getIdentifier() << std::endl; // ID is query answer
+        ++m_io_found;
+    }
+
+    void visitData(std::vector<si::IData const*>& v)
+    {
+        // TODO
+        assert(!v.empty()); (void)v;
+        //cout << v[0]->getIdentifier() << " " << v[1]->getIdentifier() << endl;
+    }
+
+    size_t m_io_index;
+    size_t m_io_leaf;
+    size_t m_io_found;
+};
+
+template <typename T>
+class AreaIndex {
+	si::ISpatialIndex	*rtree;
+	si::IStorageManager	*sm;
+
+	si::id_type index_id;
+	uint32_t const index_capacity = 100;
+	uint32_t const leaf_capacity = 100;
+	uint32_t const dimension = 2;
+	double const fill_factor = 0.5;
+
+	typedef std::array<double, 2> coord_array_t;
+	int64_t		id=0;
+private:
+	si::Region region(T *area) {
+		OGREnvelope	env;
+		area->envelope(env);
+
+		coord_array_t const p1 = { env.MinX, env.MinY };
+		coord_array_t const p2 = { env.MaxX, env.MaxY };
+
+		si::Region region(
+			si::Point(p1.data(), p1.size()),
+			si::Point(p2.data(), p2.size()));
+
+		return region;
+	}
+public:
+	AreaIndex() {
+		sm=si::StorageManager::createNewMemoryStorageManager();
+		rtree=si::RTree::createNewRTree(*sm, fill_factor, index_capacity, leaf_capacity, dimension, si::RTree::RV_LINEAR, index_id);
+	}
+
+	void findoverlapping(T *area, std::vector<T*> *list) {
+		query_visitor<T> qvisitor{list};
+		rtree->intersectsWithQuery(region(area), qvisitor);
+	}
+
+	void insert(T *area) {
+		if (DEBUG)
+			std::cout << "Insert: " << area->id() << std::endl;
+		rtree->insertData(sizeof(&area), (const byte *) &area, region(area), area->id());
+	}
+};
+
+std::vector<myArea*>	arealist;
+AreaIndex<myArea>	areaindex;
+
+class OGRGen : public osmium::handler::Handler {
+	osmium::geom::OGRFactory<>	m_factory;
+public:
+	// This callback is called by osmium::apply for each area in the data.
+	void area(const osmium::Area& area) {
+		try {
+			uint8_t		src=area.from_way() ? SRC_WAY : SRC_RELATION;
+			myArea		*a=new myArea{m_factory.create_multipolygon(area), src, area.orig_id()};
+
+			areaindex.insert(a);
+			arealist.push_back(a);
+		} catch (const osmium::geometry_error& e) {
+			std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+		} catch (osmium::invalid_location) {
+			std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
+		}
+	}
+
+	void way(const osmium::Way&	way) {
+
+		if (!way.is_closed())
+			return;
+
+		const osmium::TagList& taglist=way.tags();
+
+		if (!taglist.get_value_by_key("landuse"))
+			return;
+
+		if (way.nodes().size() < 2)
+			return;
+
+		if (!way.ends_have_same_id())
+			return;
+
+		try {
+			myArea	*a=new myArea{m_factory.create_polygon(way), SRC_WAY, way.id()};
+			areaindex.insert(a);
+			arealist.push_back(a);
+		} catch (osmium::geometry_error) {
+			std::cerr << "Geometry error way id " << way.id() << std::endl;
+		} catch (osmium::invalid_location) {
+			std::cerr << "Invalid location way id " << way.id() << std::endl;
+		}
+	}
+};
+int main(int argc, char* argv[]) {
+    // Initialize an empty DynamicHandler. Later it will be associated
+    // with one of the handlers. You can think of the DynamicHandler as
+    // a kind of "variant handler" or a "pointer handler" pointing to the
+    // real handler.
+    osmium::handler::DynamicHandler handler;
+    handler.set<OGRGen>();
+
+    osmium::io::File input_file{argv[1]};
+
+    // Configuration for the multipolygon assembler. Here the default settings
+    // are used, but you could change multiple settings.
+    osmium::area::Assembler::config_type assembler_config;
+
+    // Set up a filter matching only forests. This will be used to only build
+    // areas with matching tags.
+    osmium::TagsFilter filter{false};
+    filter.add_rule(true, "landuse", "forest");
+    filter.add_rule(true, "natural", "wood");
+
+    // Initialize the MultipolygonManager. Its job is to collect all
+    // relations and member ways needed for each area. It then calls an
+    // instance of the osmium::area::Assembler class (with the given config)
+    // to actually assemble one area. The filter parameter is optional, if
+    // it is not set, all areas will be built.
+    osmium::area::MultipolygonManager<osmium::area::Assembler> mp_manager{assembler_config, filter};
+
+    // We read the input file twice. In the first pass, only relations are
+    // read and fed into the multipolygon manager.
+    std::cerr << "Pass 1...\n";
+    osmium::relations::read_relations(input_file, mp_manager);
+    std::cerr << "Pass 1 done\n";
+
+    // Output the amount of main memory used so far. All multipolygon relations
+    // are in memory now.
+    std::cerr << "Memory:\n";
+    osmium::relations::print_used_memory(std::cerr, mp_manager.used_memory());
+
+    // The index storing all node locations.
+    index_type index;
+
+    // The handler that stores all node locations in the index and adds them
+    // to the ways.
+    location_handler_type location_handler{index};
+
+    // If a location is not available in the index, we ignore it. It might
+    // not be needed (if it is not part of a multipolygon relation), so why
+    // create an error?
+    location_handler.ignore_errors();
+
+    // On the second pass we read all objects and run them first through the
+    // node location handler and then the multipolygon collector. The collector
+    // will put the areas it has created into the "buffer" which are then
+    // fed through our "handler".
+    std::cerr << "Pass 2...\n";
+    osmium::io::Reader reader{input_file};
+    osmium::apply(reader, location_handler, handler,
+	mp_manager.handler([&handler](osmium::memory::Buffer&& buffer) {
+        osmium::apply(buffer, handler);
+    }));
+    reader.close();
+    std::cerr << "Pass 2 done\n";
+
+    // Output the amount of main memory used so far. All complete multipolygon
+    // relations have been cleaned up.
+    std::cerr << "Memory:\n";
+    osmium::relations::print_used_memory(std::cerr, mp_manager.used_memory());
+
+    // If there were multipolgyon relations in the input, but some of their
+    // members are not in the input file (which often happens for extracts)
+    // this will write the IDs of the incomplete relations to stderr.
+    std::vector<osmium::object_id_type> incomplete_relations_ids;
+    mp_manager.for_each_incomplete_relation([&](const osmium::relations::RelationHandle& handle){
+        incomplete_relations_ids.push_back(handle->id());
+    });
+    if (!incomplete_relations_ids.empty()) {
+        std::cerr << "Warning! Some member ways missing for these multipolygon relations:";
+        for (const auto id : incomplete_relations_ids) {
+            std::cerr << " " << id;
+        }
+        std::cerr << "\n";
+    }
+
+	for(auto ma : arealist) {
+		std::vector<myArea*>	list;
+		if (DEBUG)
+			std::cout << "Checking overlap for " << ma->osmid << std::endl;
+		areaindex.findoverlapping(ma, &list);
+
+		for(auto oa : list) {
+			if (DEBUG)
+				std::cout << "\tIndex returned " << oa->osmid << std::endl;
+
+			/*
+			 * Overlapping ourselves or an id smaller than ours
+			 * We only want to check a -> b not b -> a again as they
+			 * will overlap too anyway.
+			 */
+			if (oa->areaid <= ma->areaid)
+				continue;
+
+			if (DEBUG)
+				std::cout << "\t\tChecking against " << oa->osmid << std::endl;
+
+			if (oa->overlaps(ma)) {
+				if (DEBUG)
+					std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
+				ma->dump();
+				oa->dump();
+			}
+		}
+	}
+}
+
