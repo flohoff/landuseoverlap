@@ -69,8 +69,7 @@ using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, 
 // The location handler always depends on the index type
 using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
-#define DEBUG 1
-
+#define DEBUG 0
 
 uint64_t	globalid=0;
 
@@ -86,9 +85,14 @@ class myArea {
 
 	uint8_t					osmtype;
 	osmium::object_id_type			osmid;
+	osmium::object_id_type			changesetid;
+	osmium::Timestamp			timestamp;
+	std::string				user;
 
-
-	myArea(std::unique_ptr<OGRGeometry> geom, uint8_t otype, osmium::object_id_type oid) : geometry(std::move(geom)), osmtype(otype), osmid(oid) {
+	myArea(std::unique_ptr<OGRGeometry> geom, uint8_t otype, const osmium::Area &area) :
+			geometry(std::move(geom)), osmtype(otype),
+			osmid(area.orig_id()), changesetid(area.changeset()),
+			user(area.user()), timestamp(area.timestamp()) {
 		areaid=globalid++;
 	}
 
@@ -129,10 +133,12 @@ public:
 		m_layer_overlap->add_field("area1_id", OFTString, 20);
 		m_layer_overlap->add_field("area1_type", OFTString, 20);
 		m_layer_overlap->add_field("area1_changeset", OFTString, 20);
+		m_layer_overlap->add_field("area1_user", OFTString, 20);
 
 		m_layer_overlap->add_field("area2_id", OFTString, 20);
 		m_layer_overlap->add_field("area2_type", OFTString, 20);
 		m_layer_overlap->add_field("area2_changeset", OFTString, 20);
+		m_layer_overlap->add_field("area2_user", OFTString, 20);
 	}
 
 	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
@@ -182,8 +188,12 @@ public:
 			gdalcpp::Feature feature{*m_layer_overlap, std::move(intersection)};
 			feature.set_field("area1_id", static_cast<double>(a->osmid));
 			feature.set_field("area1_type", a->type());
+			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
+			feature.set_field("area1_user", a->user.c_str());
 			feature.set_field("area2_id", static_cast<double>(b->osmid));
 			feature.set_field("area2_type", b->type());
+			feature.set_field("area2_changeset", static_cast<double>(b->changesetid));
+			feature.set_field("area2_user", b->user.c_str());
 			feature.add_to_layer();
 		} catch (gdalcpp::gdal_error) {
 			std::cout << "gdal_error while creating feature " << std::endl;
@@ -296,7 +306,7 @@ public:
 	void area(const osmium::Area& area) {
 		try {
 			uint8_t		src=area.from_way() ? SRC_WAY : SRC_RELATION;
-			myArea		*a=new myArea{m_factory.create_multipolygon(area), src, area.orig_id()};
+			myArea		*a=new myArea{m_factory.create_multipolygon(area), src, area};
 
 			areaindex.insert(a);
 			arealist.push_back(a);
@@ -306,34 +316,6 @@ public:
 			std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
 		}
 	}
-#if 0
-	void way(const osmium::Way&	way) {
-
-		if (!way.is_closed())
-			return;
-
-		const osmium::TagList& taglist=way.tags();
-
-		if (!taglist.get_value_by_key("landuse"))
-			return;
-
-		if (way.nodes().size() < 2)
-			return;
-
-		if (!way.ends_have_same_id())
-			return;
-
-		try {
-			myArea	*a=new myArea{m_factory.create_polygon(way), SRC_WAY, way.id()};
-			areaindex.insert(a);
-			arealist.push_back(a);
-		} catch (osmium::geometry_error) {
-			std::cerr << "Geometry error way id " << way.id() << std::endl;
-		} catch (osmium::invalid_location) {
-			std::cerr << "Invalid location way id " << way.id() << std::endl;
-		}
-	}
-#endif
 };
 
 namespace po = boost::program_options;
