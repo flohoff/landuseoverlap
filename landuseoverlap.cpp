@@ -69,7 +69,7 @@ using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, 
 // The location handler always depends on the index type
 using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
-#define DEBUG 0
+#define DEBUG 1
 
 
 uint64_t	globalid=0;
@@ -110,6 +110,7 @@ class myArea {
 
 	void dump(void ) {
 		std::cout << " Dump of area id " << areaid << " from OSM id " << osmid << " type " << (int) osmtype << std::endl;
+		geometry->dumpReadable(stdout, nullptr, nullptr);
 	}
 };
 
@@ -143,10 +144,25 @@ public:
 		if (!intersection)
 			return nullptr;
 
+		if (DEBUG) {
+			std::cout << "Intersecion WKT" << std::endl;
+			intersection->dumpReadable(stdout, nullptr, nullptr);
+		}
+
 		if (intersection->getGeometryType() == wkbMultiPolygon)
 			return std::move(intersection);
 
-		std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon};
+		if (intersection->getGeometryType() != wkbPolygon) {
+			std::cout << "Intersection of " << a->osmid << " and " << b->osmid << " is not a (Multi)Polygon - Building ConvexHull" << std::endl;
+			intersection->dumpReadable(stdout, nullptr, nullptr);
+
+			std::unique_ptr<OGRMultiPolygon> hull{new OGRMultiPolygon()};
+			hull->addGeometry(intersection->ConvexHull());
+
+			return std::move(hull);
+		}
+
+		std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
 		mpoly->addGeometryDirectly(intersection.release());
 
 		return std::move(mpoly);
@@ -290,7 +306,7 @@ public:
 			std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
 		}
 	}
-
+#if 0
 	void way(const osmium::Way&	way) {
 
 		if (!way.is_closed())
@@ -317,6 +333,7 @@ public:
 			std::cerr << "Invalid location way id " << way.id() << std::endl;
 		}
 	}
+#endif
 };
 
 namespace po = boost::program_options;
@@ -439,7 +456,7 @@ int main(int argc, char* argv[]) {
 				continue;
 
 			if (DEBUG)
-				std::cout << "\t\tChecking against " << oa->osmid << std::endl;
+				std::cout << "\t\tChecking against " << oa->osmid << " areaids " << oa->areaid << "/" << ma->areaid << std::endl;
 
 			if (oa->overlaps(ma)) {
 				if (DEBUG) {
