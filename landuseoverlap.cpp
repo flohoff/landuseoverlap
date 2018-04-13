@@ -128,7 +128,9 @@ class myArea {
 	}
 
 	bool overlaps(myArea *oa) {
-		return geometry->Overlaps(oa->geometry.get());
+		return geometry->Overlaps(oa->geometry.get())
+			|| geometry->Contains(oa->geometry.get())
+			|| geometry->Within(oa->geometry.get());
 	}
 
 	const char *type(void ) {
@@ -158,11 +160,13 @@ public:
 		m_layer_overlap->add_field("area1_type", OFTString, 20);
 		m_layer_overlap->add_field("area1_changeset", OFTString, 20);
 		m_layer_overlap->add_field("area1_user", OFTString, 20);
+		m_layer_overlap->add_field("area1_timestamp", OFTString, 20);
 
 		m_layer_overlap->add_field("area2_id", OFTString, 20);
 		m_layer_overlap->add_field("area2_type", OFTString, 20);
 		m_layer_overlap->add_field("area2_changeset", OFTString, 20);
 		m_layer_overlap->add_field("area2_user", OFTString, 20);
+		m_layer_overlap->add_field("area2_timestamp", OFTString, 20);
 
 
 		m_layer_natural=new gdalcpp::Layer(dataset, "natural", wkbMultiPolygon);
@@ -171,11 +175,13 @@ public:
 		m_layer_natural->add_field("area1_type", OFTString, 20);
 		m_layer_natural->add_field("area1_changeset", OFTString, 20);
 		m_layer_natural->add_field("area1_user", OFTString, 20);
+		m_layer_natural->add_field("area1_timestamp", OFTString, 20);
 
 		m_layer_natural->add_field("area2_id", OFTString, 20);
 		m_layer_natural->add_field("area2_type", OFTString, 20);
 		m_layer_natural->add_field("area2_changeset", OFTString, 20);
 		m_layer_natural->add_field("area2_user", OFTString, 20);
+		m_layer_natural->add_field("area2_timestamp", OFTString, 20);
 	}
 
 	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
@@ -232,10 +238,12 @@ public:
 			feature.set_field("area1_id", static_cast<double>(a->osmid));
 			feature.set_field("area1_type", a->type());
 			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
+			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
 			feature.set_field("area1_user", a->user.c_str());
 			feature.set_field("area2_id", static_cast<double>(b->osmid));
 			feature.set_field("area2_type", b->type());
 			feature.set_field("area2_changeset", static_cast<double>(b->changesetid));
+			feature.set_field("area2_timestamp", b->timestamp.to_iso().c_str());
 			feature.set_field("area2_user", b->user.c_str());
 			feature.add_to_layer();
 		} catch (gdalcpp::gdal_error) {
