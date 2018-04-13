@@ -78,12 +78,21 @@ enum {
 	SRC_WAY
 };
 
+enum {
+	AREA_UNKNOWN,
+	AREA_NATURAL,
+	AREA_LANDUSE
+};
+
 class myArea {
 	public:
 	std::unique_ptr<const OGRGeometry>	geometry;
 	uint64_t				areaid;
 
 	uint8_t					osmtype;
+	uint8_t					areatype;
+	const char				*key;
+	const char				*value;
 	osmium::object_id_type			osmid;
 	osmium::object_id_type			changesetid;
 	osmium::Timestamp			timestamp;
@@ -93,6 +102,20 @@ class myArea {
 			geometry(std::move(geom)), osmtype(otype),
 			osmid(area.orig_id()), changesetid(area.changeset()),
 			user(area.user()), timestamp(area.timestamp()) {
+
+		const osmium::TagList& taglist=area.tags();
+		if (taglist.has_key("natural")) {
+			key="natural";
+			areatype=AREA_NATURAL;
+		} else if (taglist.has_key("landuse")) {
+			key="landuse";
+			areatype=AREA_LANDUSE;
+		} else {
+			key="unknown";
+			areatype=AREA_UNKNOWN;
+		}
+		value=taglist.get_value_by_key(key, nullptr);
+
 		areaid=globalid++;
 	}
 
@@ -120,15 +143,16 @@ class myArea {
 
 class SpatiaLiteWriter : public osmium::handler::Handler {
     gdalcpp::Layer		*m_layer_overlap;
+    gdalcpp::Layer		*m_layer_natural;
     gdalcpp::Dataset		dataset;
     osmium::geom::OGRFactory<>	m_factory{};
 public:
     explicit SpatiaLiteWriter(std::string &dbname) :
 	dataset("sqlite", dbname, gdalcpp::SRS{}, {  "SPATIALITE=TRUE", "INIT_WITH_EPSG=no" }) {
 
-		m_layer_overlap=new gdalcpp::Layer(dataset, "overlap", wkbMultiPolygon);
-
 		dataset.exec("PRAGMA synchronous = OFF");
+
+		m_layer_overlap=new gdalcpp::Layer(dataset, "overlap", wkbMultiPolygon);
 
 		m_layer_overlap->add_field("area1_id", OFTString, 20);
 		m_layer_overlap->add_field("area1_type", OFTString, 20);
@@ -139,6 +163,19 @@ public:
 		m_layer_overlap->add_field("area2_type", OFTString, 20);
 		m_layer_overlap->add_field("area2_changeset", OFTString, 20);
 		m_layer_overlap->add_field("area2_user", OFTString, 20);
+
+
+		m_layer_natural=new gdalcpp::Layer(dataset, "natural", wkbMultiPolygon);
+
+		m_layer_natural->add_field("area1_id", OFTString, 20);
+		m_layer_natural->add_field("area1_type", OFTString, 20);
+		m_layer_natural->add_field("area1_changeset", OFTString, 20);
+		m_layer_natural->add_field("area1_user", OFTString, 20);
+
+		m_layer_natural->add_field("area2_id", OFTString, 20);
+		m_layer_natural->add_field("area2_type", OFTString, 20);
+		m_layer_natural->add_field("area2_changeset", OFTString, 20);
+		m_layer_natural->add_field("area2_user", OFTString, 20);
 	}
 
 	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
@@ -184,8 +221,14 @@ public:
 		if (DEBUG)
 			std::cout << "OGR Type " << intersection->getGeometryName() << std::endl;
 
+
+		gdalcpp::Layer		*layer=m_layer_overlap;
+		if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL) {
+			layer=m_layer_natural;
+		}
+
 		try  {
-			gdalcpp::Feature feature{*m_layer_overlap, std::move(intersection)};
+			gdalcpp::Feature feature{*layer, std::move(intersection)};
 			feature.set_field("area1_id", static_cast<double>(a->osmid));
 			feature.set_field("area1_type", a->type());
 			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
@@ -349,8 +392,7 @@ int main(int argc, char* argv[]) {
     // areas with matching tags.
     osmium::TagsFilter filter{false};
     filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
-	//filter.add_rule(true, "landuse", "forest");
-	//filter.add_rule(true, "natural", "wood");
+    filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
 
     // Initialize the MultipolygonManager. Its job is to collect all
     // relations and member ways needed for each area. It then calls an
