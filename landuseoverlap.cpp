@@ -154,34 +154,26 @@ public:
 
 		dataset.exec("PRAGMA synchronous = OFF");
 
-		m_layer_overlap=new gdalcpp::Layer(dataset, "overlap", wkbMultiPolygon);
+		m_layer_overlap=addAreaOverlapLayer("overlap");
+		m_layer_natural=addAreaOverlapLayer("natural");
+	}
 
-		m_layer_overlap->add_field("area1_id", OFTString, 20);
-		m_layer_overlap->add_field("area1_type", OFTString, 20);
-		m_layer_overlap->add_field("area1_changeset", OFTString, 20);
-		m_layer_overlap->add_field("area1_user", OFTString, 20);
-		m_layer_overlap->add_field("area1_timestamp", OFTString, 20);
+	gdalcpp::Layer *addAreaOverlapLayer(const char *name) {
+		gdalcpp::Layer *layer=new gdalcpp::Layer(dataset, name, wkbMultiPolygon);
 
-		m_layer_overlap->add_field("area2_id", OFTString, 20);
-		m_layer_overlap->add_field("area2_type", OFTString, 20);
-		m_layer_overlap->add_field("area2_changeset", OFTString, 20);
-		m_layer_overlap->add_field("area2_user", OFTString, 20);
-		m_layer_overlap->add_field("area2_timestamp", OFTString, 20);
+		layer->add_field("area1_id", OFTString, 20);
+		layer->add_field("area1_type", OFTString, 20);
+		layer->add_field("area1_changeset", OFTString, 20);
+		layer->add_field("area1_user", OFTString, 20);
+		layer->add_field("area1_timestamp", OFTString, 20);
 
+		layer->add_field("area2_id", OFTString, 20);
+		layer->add_field("area2_type", OFTString, 20);
+		layer->add_field("area2_changeset", OFTString, 20);
+		layer->add_field("area2_user", OFTString, 20);
+		layer->add_field("area2_timestamp", OFTString, 20);
 
-		m_layer_natural=new gdalcpp::Layer(dataset, "natural", wkbMultiPolygon);
-
-		m_layer_natural->add_field("area1_id", OFTString, 20);
-		m_layer_natural->add_field("area1_type", OFTString, 20);
-		m_layer_natural->add_field("area1_changeset", OFTString, 20);
-		m_layer_natural->add_field("area1_user", OFTString, 20);
-		m_layer_natural->add_field("area1_timestamp", OFTString, 20);
-
-		m_layer_natural->add_field("area2_id", OFTString, 20);
-		m_layer_natural->add_field("area2_type", OFTString, 20);
-		m_layer_natural->add_field("area2_changeset", OFTString, 20);
-		m_layer_natural->add_field("area2_user", OFTString, 20);
-		m_layer_natural->add_field("area2_timestamp", OFTString, 20);
+		return layer;
 	}
 
 	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
