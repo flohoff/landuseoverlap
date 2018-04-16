@@ -176,71 +176,91 @@ public:
 		return layer;
 	}
 
-	std::unique_ptr<OGRGeometry> make_intersection_mpoly(myArea *a, myArea *b) {
+	void writeMultiPolygontoLayer(gdalcpp::Layer *layer, myArea *a, myArea *b, std::unique_ptr<OGRGeometry> mpoly) {
+		try  {
+			gdalcpp::Feature feature{*layer, std::move(mpoly)};
+
+			feature.set_field("area1_id", static_cast<double>(a->osmid));
+			feature.set_field("area1_type", a->type());
+			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
+			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
+			feature.set_field("area1_user", a->user.c_str());
+
+			feature.set_field("area2_id", static_cast<double>(b->osmid));
+			feature.set_field("area2_type", b->type());
+			feature.set_field("area2_changeset", static_cast<double>(b->changesetid));
+			feature.set_field("area2_timestamp", b->timestamp.to_iso().c_str());
+			feature.set_field("area2_user", b->user.c_str());
+
+			feature.add_to_layer();
+		} catch (gdalcpp::gdal_error) {
+			std::cout << "gdal_error while creating feature " << std::endl;
+		}
+	}
+
+	void writeGeometryCollection(gdalcpp::Layer *layer, myArea *a, myArea *b, OGRGeometryCollection *collection) {
+		for(int i=0;i<collection->getNumGeometries();i++) {
+			OGRGeometry  *geom=collection->getGeometryRef(i);
+			switch(geom->getGeometryType()) {
+				case(wkbMultiPolygon): {
+					std::unique_ptr<OGRGeometry>	g{geom->clone()};
+					writeMultiPolygontoLayer(layer, a, b, std::move(g));
+					break;
+				}
+				case(wkbPolygon): {
+					std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
+					mpoly->addGeometry(geom);
+					writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
+					break;
+				}
+				case(wkbGeometryCollection): {
+					writeGeometryCollection(layer, a, b, (OGRGeometryCollection *) geom);
+					break;
+				}
+			}
+		}
+	}
+
+	void make_intersection_mpoly(myArea *a, myArea *b) {
 		if (!a || !b || a->geometry == nullptr || b->geometry == nullptr)
-			return nullptr;
+			return;
 
 		std::unique_ptr<OGRGeometry> intersection{a->geometry->Intersection(b->geometry.get())};
 
 		if (!intersection)
-			return nullptr;
+			return;
 
 		if (DEBUG) {
 			std::cout << "Intersecion WKT" << std::endl;
 			intersection->dumpReadable(stdout, nullptr, nullptr);
 		}
 
-		if (intersection->getGeometryType() == wkbMultiPolygon)
-			return std::move(intersection);
-
-		if (intersection->getGeometryType() != wkbPolygon) {
-			std::cout << "Intersection of " << a->osmid << " and " << b->osmid << " is not a (Multi)Polygon - Building ConvexHull" << std::endl;
-			intersection->dumpReadable(stdout, nullptr, nullptr);
-
-			std::unique_ptr<OGRMultiPolygon> hull{new OGRMultiPolygon()};
-			hull->addGeometry(intersection->ConvexHull());
-
-			return std::move(hull);
-		}
-
-		std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
-		mpoly->addGeometryDirectly(intersection.release());
-
-		return std::move(mpoly);
-
-	}
-
-	void write_overlap(myArea *a, myArea *b) {
-		std::unique_ptr<OGRGeometry> intersection=make_intersection_mpoly(a, b);
-
-		if (!intersection)
-			return;
-
-		if (DEBUG)
-			std::cout << "OGR Type " << intersection->getGeometryName() << std::endl;
-
-
 		gdalcpp::Layer		*layer=m_layer_overlap;
 		if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL) {
 			layer=m_layer_natural;
 		}
 
-		try  {
-			gdalcpp::Feature feature{*layer, std::move(intersection)};
-			feature.set_field("area1_id", static_cast<double>(a->osmid));
-			feature.set_field("area1_type", a->type());
-			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
-			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
-			feature.set_field("area1_user", a->user.c_str());
-			feature.set_field("area2_id", static_cast<double>(b->osmid));
-			feature.set_field("area2_type", b->type());
-			feature.set_field("area2_changeset", static_cast<double>(b->changesetid));
-			feature.set_field("area2_timestamp", b->timestamp.to_iso().c_str());
-			feature.set_field("area2_user", b->user.c_str());
-			feature.add_to_layer();
-		} catch (gdalcpp::gdal_error) {
-			std::cout << "gdal_error while creating feature " << std::endl;
+		switch(intersection->getGeometryType()) {
+			case(wkbMultiPolygon): {
+				writeMultiPolygontoLayer(layer, a, b, std::move(intersection));
+				break;
+			}
+			case(wkbPolygon): {
+				std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
+				mpoly->addGeometryDirectly(intersection.release());
+				writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
+				break;
+			}
+			case(wkbGeometryCollection): {
+				OGRGeometry *geom=intersection.get();
+				writeGeometryCollection(layer, a, b, (OGRGeometryCollection *) geom);
+				break;
+			}
 		}
+	}
+
+	void write_overlap(myArea *a, myArea *b) {
+		make_intersection_mpoly(a, b);
 	}
 };
 
