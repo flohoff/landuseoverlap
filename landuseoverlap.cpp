@@ -193,35 +193,48 @@ public:
 			feature.set_field("area2_user", b->user.c_str());
 
 			feature.add_to_layer();
+
+
+			std::cout
+					<< "area "
+					<< a->type() << " " << a->osmid << ","
+					<< b->type() << " " << b->osmid << " "
+					<< "changesets "
+					<< a->changesetid << "," <<  b->changesetid << " "
+					<< a->timestamp.to_iso() << "," << b->timestamp.to_iso() << " "
+					<< a->user << "," << b->user
+					<< std::endl;
+
 		} catch (gdalcpp::gdal_error) {
 			std::cout << "gdal_error while creating feature " << std::endl;
 		}
 	}
 
-	void writeGeometryCollection(gdalcpp::Layer *layer, myArea *a, myArea *b, OGRGeometryCollection *collection) {
-		for(int i=0;i<collection->getNumGeometries();i++) {
-			OGRGeometry  *geom=collection->getGeometryRef(i);
-			switch(geom->getGeometryType()) {
-				case(wkbMultiPolygon): {
-					std::unique_ptr<OGRGeometry>	g{geom->clone()};
-					writeMultiPolygontoLayer(layer, a, b, std::move(g));
-					break;
-				}
-				case(wkbPolygon): {
-					std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
-					mpoly->addGeometry(geom);
-					writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
-					break;
-				}
-				case(wkbGeometryCollection): {
-					writeGeometryCollection(layer, a, b, (OGRGeometryCollection *) geom);
+	void writeGeometry(gdalcpp::Layer *layer, myArea *a, myArea *b, OGRGeometry *geom) {
+		switch(geom->getGeometryType()) {
+			case(wkbMultiPolygon): {
+				std::unique_ptr<OGRGeometry>	g{geom->clone()};
+				writeMultiPolygontoLayer(layer, a, b, std::move(g));
+				break;
+			}
+			case(wkbPolygon): {
+				std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
+				mpoly->addGeometry(geom);
+				writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
+				break;
+			}
+			case(wkbGeometryCollection): {
+				OGRGeometryCollection	*collection=(OGRGeometryCollection *) geom;
+				for(int i=0;i<collection->getNumGeometries();i++) {
+					OGRGeometry *sub=collection->getGeometryRef(i);
+					writeGeometry(layer, a, b, sub);
 					break;
 				}
 			}
 		}
 	}
 
-	void make_intersection_mpoly(myArea *a, myArea *b) {
+	void write_overlap(myArea *a, myArea *b) {
 		if (!a || !b || a->geometry == nullptr || b->geometry == nullptr)
 			return;
 
@@ -240,27 +253,7 @@ public:
 			layer=m_layer_natural;
 		}
 
-		switch(intersection->getGeometryType()) {
-			case(wkbMultiPolygon): {
-				writeMultiPolygontoLayer(layer, a, b, std::move(intersection));
-				break;
-			}
-			case(wkbPolygon): {
-				std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
-				mpoly->addGeometryDirectly(intersection.release());
-				writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
-				break;
-			}
-			case(wkbGeometryCollection): {
-				OGRGeometry *geom=intersection.get();
-				writeGeometryCollection(layer, a, b, (OGRGeometryCollection *) geom);
-				break;
-			}
-		}
-	}
-
-	void write_overlap(myArea *a, myArea *b) {
-		make_intersection_mpoly(a, b);
+		writeGeometry(layer, a, b, intersection.get());
 	}
 };
 
