@@ -114,7 +114,7 @@ class myArea {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
 		}
-		value=taglist.get_value_by_key(key, nullptr);
+		value=strdup(taglist.get_value_by_key(key, nullptr));
 
 		areaid=globalid++;
 	}
@@ -166,12 +166,16 @@ public:
 		layer->add_field("area1_changeset", OFTString, 20);
 		layer->add_field("area1_user", OFTString, 20);
 		layer->add_field("area1_timestamp", OFTString, 20);
+		layer->add_field("area1_key", OFTString, 20);
+		layer->add_field("area1_value", OFTString, 20);
 
 		layer->add_field("area2_id", OFTString, 20);
 		layer->add_field("area2_type", OFTString, 20);
 		layer->add_field("area2_changeset", OFTString, 20);
 		layer->add_field("area2_user", OFTString, 20);
 		layer->add_field("area2_timestamp", OFTString, 20);
+		layer->add_field("area2_key", OFTString, 20);
+		layer->add_field("area2_value", OFTString, 20);
 
 		return layer;
 	}
@@ -185,19 +189,24 @@ public:
 			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
 			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
 			feature.set_field("area1_user", a->user.c_str());
+			feature.set_field("area1_key", b->key);
+			feature.set_field("area1_value", b->key);
 
 			feature.set_field("area2_id", static_cast<double>(b->osmid));
 			feature.set_field("area2_type", b->type());
 			feature.set_field("area2_changeset", static_cast<double>(b->changesetid));
 			feature.set_field("area2_timestamp", b->timestamp.to_iso().c_str());
 			feature.set_field("area2_user", b->user.c_str());
+			feature.set_field("area2_key", b->key);
+			feature.set_field("area2_value", b->key);
 
 			feature.add_to_layer();
 
 
 			std::cout
-					<< "area "
-					<< a->type() << " " << a->osmid << ","
+					<< a->key << " " << a->value << " "
+					<< a->type() << " " << a->osmid << " overlaps "
+					<< b->key << " " << b->value << " "
 					<< b->type() << " " << b->osmid << " "
 					<< "changesets "
 					<< a->changesetid << "," <<  b->changesetid << " "
@@ -206,7 +215,7 @@ public:
 					<< std::endl;
 
 		} catch (gdalcpp::gdal_error) {
-			std::cout << "gdal_error while creating feature " << std::endl;
+			std::cerr << "gdal_error while creating feature " << std::endl;
 		}
 	}
 
@@ -297,9 +306,7 @@ class query_visitor : public si::IVisitor {
 
     void visitData(std::vector<si::IData const*>& v)
     {
-        // TODO
         assert(!v.empty()); (void)v;
-        //cout << v[0]->getIdentifier() << " " << v[1]->getIdentifier() << endl;
     }
 
     size_t m_io_index;
@@ -367,7 +374,7 @@ public:
 			areaindex.insert(a);
 			arealist.push_back(a);
 		} catch (const osmium::geometry_error& e) {
-			std::cout << "GEOMETRY ERROR: " << e.what() << "\n";
+			std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
 		} catch (osmium::invalid_location) {
 			std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
 		}
