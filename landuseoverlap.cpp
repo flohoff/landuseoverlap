@@ -77,7 +77,7 @@ enum {
 	SRC_RELATION,
 	SRC_WAY
 };
-
+ 
 enum {
 	AREA_UNKNOWN,
 	AREA_NATURAL,
@@ -114,6 +114,7 @@ class myArea {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
 		}
+
 		value=strdup(taglist.get_value_by_key(key, nullptr));
 
 		areaid=globalid++;
@@ -190,7 +191,7 @@ public:
 			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
 			feature.set_field("area1_user", a->user.c_str());
 			feature.set_field("area1_key", b->key);
-			feature.set_field("area1_value", b->key);
+			feature.set_field("area1_value", b->value);
 
 			feature.set_field("area2_id", static_cast<double>(b->osmid));
 			feature.set_field("area2_type", b->type());
@@ -198,10 +199,9 @@ public:
 			feature.set_field("area2_timestamp", b->timestamp.to_iso().c_str());
 			feature.set_field("area2_user", b->user.c_str());
 			feature.set_field("area2_key", b->key);
-			feature.set_field("area2_value", b->key);
+			feature.set_field("area2_value", b->value);
 
 			feature.add_to_layer();
-
 
 			std::cout
 					<< a->key << " " << a->value << " "
