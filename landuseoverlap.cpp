@@ -80,6 +80,7 @@ enum {
  
 enum {
 	AREA_UNKNOWN,
+	AREA_BUILDING,
 	AREA_NATURAL,
 	AREA_LANDUSE
 };
@@ -110,6 +111,9 @@ class myArea {
 		} else if (taglist.has_key("landuse")) {
 			key="landuse";
 			areatype=AREA_LANDUSE;
+		} else if (taglist.has_key("building")) {
+			key="building";
+			areatype=AREA_BUILDING;
 		} else {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
@@ -147,6 +151,7 @@ class myArea {
 class SpatiaLiteWriter : public osmium::handler::Handler {
     gdalcpp::Layer		*m_layer_overlap;
     gdalcpp::Layer		*m_layer_natural;
+    gdalcpp::Layer		*m_layer_building;
     gdalcpp::Dataset		dataset;
     osmium::geom::OGRFactory<>	m_factory{};
 public:
@@ -157,6 +162,7 @@ public:
 
 		m_layer_overlap=addAreaOverlapLayer("overlap");
 		m_layer_natural=addAreaOverlapLayer("natural");
+		m_layer_building=addAreaOverlapLayer("building");
 	}
 
 	gdalcpp::Layer *addAreaOverlapLayer(const char *name) {
@@ -260,6 +266,8 @@ public:
 		gdalcpp::Layer		*layer=m_layer_overlap;
 		if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL) {
 			layer=m_layer_natural;
+		} else if (a->areatype == AREA_BUILDING || b->areatype == AREA_BUILDING) {
+			layer=m_layer_building;
 		}
 
 		writeGeometry(layer, a, b, intersection.get());
@@ -413,6 +421,7 @@ int main(int argc, char* argv[]) {
     osmium::TagsFilter filter{false};
     filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
     filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
+    filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
 
     // Initialize the MultipolygonManager. Its job is to collect all
     // relations and member ways needed for each area. It then calls an
@@ -498,6 +507,11 @@ int main(int argc, char* argv[]) {
 			 */
 			if (oa->areaid <= ma->areaid)
 				continue;
+
+			if (oa->areatype == AREA_BUILDING && 
+				ma->areatype != oa->areatype) {
+				continue;
+			}
 
 			if (DEBUG)
 				std::cout << "\t\tChecking against " << oa->osmid << " areaids " << oa->areaid << "/" << ma->areaid << std::endl;
