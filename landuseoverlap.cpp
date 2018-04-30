@@ -190,8 +190,8 @@ public:
 			feature.set_field("area1_changeset", static_cast<double>(a->changesetid));
 			feature.set_field("area1_timestamp", a->timestamp.to_iso().c_str());
 			feature.set_field("area1_user", a->user.c_str());
-			feature.set_field("area1_key", b->key);
-			feature.set_field("area1_value", b->value);
+			feature.set_field("area1_key", a->key);
+			feature.set_field("area1_value", a->value);
 
 			feature.set_field("area2_id", static_cast<double>(b->osmid));
 			feature.set_field("area2_type", b->type());
