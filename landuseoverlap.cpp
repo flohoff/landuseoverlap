@@ -81,7 +81,8 @@ enum {
 enum {
 	AREA_UNKNOWN,
 	AREA_NATURAL,
-	AREA_LANDUSE
+	AREA_LANDUSE,
+	AREA_BUILDING
 };
 
 class myArea {
@@ -109,6 +110,9 @@ class myArea {
 			areatype=AREA_NATURAL;
 		} else if (taglist.has_key("landuse")) {
 			key="landuse";
+			areatype=AREA_LANDUSE;
+		} else if (taglist.has_key("building")) {
+			key="building";
 			areatype=AREA_LANDUSE;
 		} else {
 			key="unknown";
@@ -147,6 +151,7 @@ class myArea {
 class SpatiaLiteWriter : public osmium::handler::Handler {
     gdalcpp::Layer		*m_layer_overlap;
     gdalcpp::Layer		*m_layer_natural;
+    gdalcpp::Layer		*m_layer_building;
     gdalcpp::Dataset		dataset;
     osmium::geom::OGRFactory<>	m_factory{};
 public:
@@ -157,6 +162,7 @@ public:
 
 		m_layer_overlap=addAreaOverlapLayer("overlap");
 		m_layer_natural=addAreaOverlapLayer("natural");
+		m_layer_building=addAreaOverlapLayer("building");
 	}
 
 	gdalcpp::Layer *addAreaOverlapLayer(const char *name) {
@@ -260,6 +266,8 @@ public:
 		gdalcpp::Layer		*layer=m_layer_overlap;
 		if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL) {
 			layer=m_layer_natural;
+		} else if (a->areatype == AREA_BUILDING || b->areatype == AREA_BUILDING) {
+			layer=m_layer_building;
 		}
 
 		writeGeometry(layer, a, b, intersection.get());
@@ -315,7 +323,7 @@ class query_visitor : public si::IVisitor {
 };
 
 template <typename T>
-class AreaIndex {
+class AreaIndex : public osmium::handler::Handler{
 	si::ISpatialIndex	*rtree;
 	si::IStorageManager	*sm;
 
@@ -327,6 +335,10 @@ class AreaIndex {
 
 	typedef std::array<double, 2> coord_array_t;
 	int64_t		id=0;
+
+	osmium::geom::OGRFactory<>	m_factory;
+public:
+	std::vector<T*>			arealist;
 private:
 	si::Region region(T *area) {
 		OGREnvelope	env;
@@ -357,26 +369,54 @@ public:
 			std::cout << "Insert: " << area->id() << std::endl;
 		rtree->insertData(sizeof(&area), (const byte *) &area, region(area), area->id());
 	}
-};
 
-std::vector<myArea*>	arealist;
-AreaIndex<myArea>	areaindex;
-
-class OGRGen : public osmium::handler::Handler {
-	osmium::geom::OGRFactory<>	m_factory;
-public:
 	// This callback is called by osmium::apply for each area in the data.
 	void area(const osmium::Area& area) {
 		try {
 			uint8_t		src=area.from_way() ? SRC_WAY : SRC_RELATION;
 			myArea		*a=new myArea{m_factory.create_multipolygon(area), src, area};
 
-			areaindex.insert(a);
+			insert(a);
 			arealist.push_back(a);
 		} catch (const osmium::geometry_error& e) {
 			std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
 		} catch (osmium::invalid_location) {
 			std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
+		}
+	}
+
+	void processoverlap(SpatiaLiteWriter& writer) {
+		for(auto ma : arealist) {
+			std::vector<myArea*>	list;
+			if (DEBUG)
+				std::cout << "Checking overlap for " << ma->osmid << std::endl;
+			findoverlapping(ma, &list);
+
+			for(auto oa : list) {
+				if (DEBUG)
+					std::cout << "\tIndex returned " << oa->osmid << std::endl;
+
+				/*
+				 * Overlapping ourselves or an id smaller than ours
+				 * We only want to check a -> b not b -> a again as they
+				 * will overlap too anyway.
+				 */
+				if (oa->areaid <= ma->areaid)
+					continue;
+
+				if (DEBUG)
+					std::cout << "\t\tChecking against " << oa->osmid << " areaids " << oa->areaid << "/" << ma->areaid << std::endl;
+
+				if (oa->overlaps(ma)) {
+					if (DEBUG) {
+						std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
+						ma->dump();
+						oa->dump();
+					}
+
+					writer.write_overlap(ma, oa);
+				}
+			}
 		}
 	}
 };
@@ -395,123 +435,58 @@ int main(int argc, char* argv[]) {
         po::store(po::parse_command_line(argc, argv, desc), vm);
 	po::notify(vm);
 
-    // Initialize an empty DynamicHandler. Later it will be associated
-    // with one of the handlers. You can think of the DynamicHandler as
-    // a kind of "variant handler" or a "pointer handler" pointing to the
-    // real handler.
-    osmium::handler::DynamicHandler handler;
-    handler.set<OGRGen>();
+	//osmium::handler::DynamicHandler landusehandler;
+	//landusehandler.set<AreaIndex<myArea>>();
+	AreaIndex<myArea>	landusehandler;
 
-    osmium::io::File input_file{vm["infile"].as<std::string>()};
+	//osmium::handler::DynamicHandler buildinghandler;
+	//buildinghandler.set<AreaIndex<myArea>>();
+	AreaIndex<myArea>	buildinghandler;
 
-    // Configuration for the multipolygon assembler. Here the default settings
-    // are used, but you could change multiple settings.
+	osmium::io::File input_file{vm["infile"].as<std::string>()};
+
     osmium::area::Assembler::config_type assembler_config;
 
-    // Set up a filter matching only forests. This will be used to only build
-    // areas with matching tags.
-    osmium::TagsFilter filter{false};
-    filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
-    filter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
+    osmium::TagsFilter landusefilter{false};
+    landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
+    landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
+    osmium::area::MultipolygonManager<osmium::area::Assembler> landusemp_manager{assembler_config, landusefilter};
 
-    // Initialize the MultipolygonManager. Its job is to collect all
-    // relations and member ways needed for each area. It then calls an
-    // instance of the osmium::area::Assembler class (with the given config)
-    // to actually assemble one area. The filter parameter is optional, if
-    // it is not set, all areas will be built.
-    osmium::area::MultipolygonManager<osmium::area::Assembler> mp_manager{assembler_config, filter};
+    osmium::TagsFilter buildingfilter{false};
+    buildingfilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
+    osmium::area::MultipolygonManager<osmium::area::Assembler> buildingmp_manager{assembler_config, buildingfilter};
 
     // We read the input file twice. In the first pass, only relations are
     // read and fed into the multipolygon manager.
-    std::cerr << "Pass 1...\n";
-    osmium::relations::read_relations(input_file, mp_manager);
-    std::cerr << "Pass 1 done\n";
+    osmium::relations::read_relations(input_file, landusemp_manager, buildingmp_manager);
 
-    // Output the amount of main memory used so far. All multipolygon relations
-    // are in memory now.
-    std::cerr << "Memory:\n";
-    osmium::relations::print_used_memory(std::cerr, mp_manager.used_memory());
+	index_type index;
+	location_handler_type location_handler{index};
+	location_handler.ignore_errors();
 
-    // The index storing all node locations.
-    index_type index;
+	osmium::io::Reader reader{input_file};
+	osmium::apply(reader, location_handler,
+		landusehandler,
+		landusemp_manager.handler([&landusehandler](osmium::memory::Buffer&& buffer) {
+			osmium::apply(buffer, landusehandler);
+		}),
+		buildinghandler,
+		buildingmp_manager.handler([&buildinghandler](osmium::memory::Buffer&& buffer) {
+			osmium::apply(buffer, buildinghandler);
+		})
+	);
+	reader.close();
+	std::cerr << "Pass 2 done\n";
 
-    // The handler that stores all node locations in the index and adds them
-    // to the ways.
-    location_handler_type location_handler{index};
-
-    // If a location is not available in the index, we ignore it. It might
-    // not be needed (if it is not part of a multipolygon relation), so why
-    // create an error?
-    location_handler.ignore_errors();
-
-    // On the second pass we read all objects and run them first through the
-    // node location handler and then the multipolygon collector. The collector
-    // will put the areas it has created into the "buffer" which are then
-    // fed through our "handler".
-    std::cerr << "Pass 2...\n";
-    osmium::io::Reader reader{input_file};
-    osmium::apply(reader, location_handler, handler,
-	mp_manager.handler([&handler](osmium::memory::Buffer&& buffer) {
-        osmium::apply(buffer, handler);
-    }));
-    reader.close();
-    std::cerr << "Pass 2 done\n";
-
-    // Output the amount of main memory used so far. All complete multipolygon
-    // relations have been cleaned up.
-    std::cerr << "Memory:\n";
-    osmium::relations::print_used_memory(std::cerr, mp_manager.used_memory());
-
-    // If there were multipolgyon relations in the input, but some of their
-    // members are not in the input file (which often happens for extracts)
-    // this will write the IDs of the incomplete relations to stderr.
-    std::vector<osmium::object_id_type> incomplete_relations_ids;
-    mp_manager.for_each_incomplete_relation([&](const osmium::relations::RelationHandle& handle){
-        incomplete_relations_ids.push_back(handle->id());
-    });
-    if (!incomplete_relations_ids.empty()) {
-        std::cerr << "Warning! Some member ways missing for these multipolygon relations:";
-        for (const auto id : incomplete_relations_ids) {
-            std::cerr << " " << id;
-        }
-        std::cerr << "\n";
-    }
+	std::cerr << "Memory:\n";
+	osmium::relations::print_used_memory(std::cerr, landusemp_manager.used_memory());
+	osmium::relations::print_used_memory(std::cerr, buildingmp_manager.used_memory());
 
 	OGRRegisterAll();
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
-	for(auto ma : arealist) {
-		std::vector<myArea*>	list;
-		if (DEBUG)
-			std::cout << "Checking overlap for " << ma->osmid << std::endl;
-		areaindex.findoverlapping(ma, &list);
-
-		for(auto oa : list) {
-			if (DEBUG)
-				std::cout << "\tIndex returned " << oa->osmid << std::endl;
-
-			/*
-			 * Overlapping ourselves or an id smaller than ours
-			 * We only want to check a -> b not b -> a again as they
-			 * will overlap too anyway.
-			 */
-			if (oa->areaid <= ma->areaid)
-				continue;
-
-			if (DEBUG)
-				std::cout << "\t\tChecking against " << oa->osmid << " areaids " << oa->areaid << "/" << ma->areaid << std::endl;
-
-			if (oa->overlaps(ma)) {
-				if (DEBUG) {
-					std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
-					ma->dump();
-					oa->dump();
-				}
-
-				writer.write_overlap(ma, oa);
-			}
-		}
-	}
+	landusehandler.processoverlap(writer);
+	buildinghandler.processoverlap(writer);
 }
 
