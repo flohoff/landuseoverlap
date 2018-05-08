@@ -322,6 +322,42 @@ class query_visitor : public si::IVisitor {
     size_t m_io_found;
 };
 
+class AreaOverlapCompare {
+	public:
+		bool virtual Overlaps(myArea *a, myArea *b) {
+			/*
+			 * Overlapping ourselves or an id smaller than ours
+			 * We only want to check a -> b not b -> a again as they
+			 * will overlap too anyway.
+			 */
+			if (a->areaid >= b->areaid)
+				return false;
+
+			if (a->overlaps(b))
+				return true;
+
+			return false;
+		}
+};
+
+class BuildingOverlap : public AreaOverlapCompare {
+	public:
+		bool Overlaps(myArea *a, myArea *b) {
+			/*
+			 * Overlapping ourselves or an id smaller than ours
+			 * We only want to check a -> b not b -> a again as they
+			 * will overlap too anyway.
+			 */
+			if (a->areaid >= b->areaid)
+				return false;
+
+			if (a->overlaps(b))
+				return true;
+
+			return false;
+		}
+};
+
 template <typename T>
 class AreaIndex : public osmium::handler::Handler{
 	si::ISpatialIndex	*rtree;
@@ -385,7 +421,7 @@ public:
 		}
 	}
 
-	void processoverlap(SpatiaLiteWriter& writer) {
+	void processoverlap(SpatiaLiteWriter& writer, AreaOverlapCompare& compare) {
 		for(auto ma : arealist) {
 			std::vector<myArea*>	list;
 			if (DEBUG)
@@ -396,30 +432,22 @@ public:
 				if (DEBUG)
 					std::cout << "\tIndex returned " << oa->osmid << std::endl;
 
-				/*
-				 * Overlapping ourselves or an id smaller than ours
-				 * We only want to check a -> b not b -> a again as they
-				 * will overlap too anyway.
-				 */
-				if (oa->areaid <= ma->areaid)
+				if (!compare.Overlaps(ma, oa))
 					continue;
 
-				if (DEBUG)
-					std::cout << "\t\tChecking against " << oa->osmid << " areaids " << oa->areaid << "/" << ma->areaid << std::endl;
-
-				if (oa->overlaps(ma)) {
-					if (DEBUG) {
-						std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
-						ma->dump();
-						oa->dump();
-					}
-
-					writer.write_overlap(ma, oa);
+				if (DEBUG) {
+					std::cout << "\t\tPolygon overlaps " << oa->osmid << std::endl;
+					ma->dump();
+					oa->dump();
 				}
+
+				writer.write_overlap(ma, oa);
 			}
 		}
 	}
 };
+
+
 
 namespace po = boost::program_options;
 
@@ -486,7 +514,9 @@ int main(int argc, char* argv[]) {
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
-	landusehandler.processoverlap(writer);
-	buildinghandler.processoverlap(writer);
-}
+	AreaOverlapCompare	luo;
+	landusehandler.processoverlap(writer, luo);
 
+	BuildingOverlap		bo;
+	buildinghandler.processoverlap(writer, bo);
+}
