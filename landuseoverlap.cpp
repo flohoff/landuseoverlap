@@ -113,7 +113,7 @@ class myArea {
 			areatype=AREA_LANDUSE;
 		} else if (taglist.has_key("building")) {
 			key="building";
-			areatype=AREA_LANDUSE;
+			areatype=AREA_BUILDING;
 		} else {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
