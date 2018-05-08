@@ -91,6 +91,7 @@ class myArea {
 	uint64_t				areaid;
 
 	uint8_t					osmtype;
+	int					layer=0;
 	uint8_t					areatype;
 	const char				*key;
 	const char				*value;
@@ -120,6 +121,11 @@ class myArea {
 		}
 
 		value=strdup(taglist.get_value_by_key(key, nullptr));
+
+		if (taglist.has_key("layer")) {
+			const char *layerstring=taglist.get_value_by_key("layer", nullptr);
+			layer=atoi(layerstring);
+		}
 
 		areaid=globalid++;
 	}
@@ -349,6 +355,10 @@ class BuildingOverlap : public AreaOverlapCompare {
 			 * will overlap too anyway.
 			 */
 			if (a->areaid >= b->areaid)
+				return false;
+
+			/* OSM Layer - If a roof is layer=1 dont overlap */
+			if (a->layer != b->layer)
 				return false;
 
 			if (a->overlaps(b))
