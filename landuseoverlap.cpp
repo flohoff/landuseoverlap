@@ -155,13 +155,15 @@ class myArea {
 };
 
 class SpatiaLiteWriter : public osmium::handler::Handler {
-    gdalcpp::Layer		*m_layer_overlap;
-    gdalcpp::Layer		*m_layer_natural;
-    gdalcpp::Layer		*m_layer_building;
-    gdalcpp::Dataset		dataset;
-    osmium::geom::OGRFactory<>	m_factory{};
-public:
-    explicit SpatiaLiteWriter(std::string &dbname) :
+	gdalcpp::Layer			*m_layer_overlap;
+	gdalcpp::Layer			*m_layer_natural;
+	gdalcpp::Layer			*m_layer_building;
+	gdalcpp::Dataset		dataset;
+	osmium::geom::OGRFactory<>	m_factory{};
+
+	public:
+
+	explicit SpatiaLiteWriter(std::string &dbname) :
 	dataset("sqlite", dbname, gdalcpp::SRS{}, {  "SPATIALITE=TRUE", "INIT_WITH_EPSG=no" }) {
 
 		dataset.exec("PRAGMA synchronous = OFF");
@@ -283,49 +285,48 @@ public:
 
 template <typename AT>
 class query_visitor : public si::IVisitor {
-   std::vector<AT*>	*list;
-   public:
-   query_visitor(std::vector<AT*> *l) : list(l), m_io_index(0), m_io_leaf(0), m_io_found(0) {}
+	std::vector<AT*>	*list;
 
-    void visitNode(si::INode const& n)
-    {
-        n.isLeaf() ? ++m_io_leaf : ++m_io_index;
-    }
+	public:
 
-    void visitData(si::IData const& d)
-    {
-        //si::IShape* ps = nullptr;
-        //d.getShape(&ps);
-        //std::unique_ptr<si::IShape> shape(ps);
-        //; // use shape
+	query_visitor(std::vector<AT*> *l) : list(l), m_io_index(0), m_io_leaf(0), m_io_found(0) {}
 
-        // Region is represented as array of characters
-        uint8_t* pd = 0;
-        uint32_t size = 0;
-        d.getData(size, &pd);
+	void visitNode(si::INode const& n) {
+		n.isLeaf() ? ++m_io_leaf : ++m_io_index;
+	}
 
-	AT	*ptr;
-	memcpy(&ptr, pd, sizeof(AT *));
+	void visitData(si::IData const& d) {
+		//si::IShape* ps = nullptr;
+		//d.getShape(&ps);
+		//std::unique_ptr<si::IShape> shape(ps);
+		//; // use shape
 
-	list->push_back(ptr);
-	delete[] pd;
+		// Region is represented as array of characters
+		uint8_t* pd = 0;
+		uint32_t size = 0;
+		d.getData(size, &pd);
 
-        //std::unique_ptr<uint8_t[]> data(pd);
-        // use data
-        //std::string str(reinterpret_cast<char*>(pd));
+		AT	*ptr;
+		memcpy(&ptr, pd, sizeof(AT *));
 
-	//std::cout << "Overlap " << d.getIdentifier() << std::endl; // ID is query answer
-        ++m_io_found;
-    }
+		list->push_back(ptr);
+		delete[] pd;
 
-    void visitData(std::vector<si::IData const*>& v)
-    {
-        assert(!v.empty()); (void)v;
-    }
+		//std::unique_ptr<uint8_t[]> data(pd);
+		// use data
+		//std::string str(reinterpret_cast<char*>(pd));
 
-    size_t m_io_index;
-    size_t m_io_leaf;
-    size_t m_io_found;
+		//std::cout << "Overlap " << d.getIdentifier() << std::endl; // ID is query answer
+		++m_io_found;
+	}
+
+	void visitData(std::vector<si::IData const*>& v) {
+		assert(!v.empty()); (void)v;
+	}
+
+	size_t m_io_index;
+	size_t m_io_leaf;
+	size_t m_io_found;
 };
 
 class AreaOverlapCompare {
@@ -464,13 +465,13 @@ namespace po = boost::program_options;
 int main(int argc, char* argv[]) {
 
 	po::options_description         desc("Allowed options");
-        desc.add_options()
-                ("help,h", "produce help message")
-                ("infile,i", po::value<std::string>(), "Input file")
+	desc.add_options()
+		("help,h", "produce help message")
+		("infile,i", po::value<std::string>(), "Input file")
 		("dbname,d", po::value<std::string>(), "Output database name")
-        ;
-        po::variables_map vm;
-        po::store(po::parse_command_line(argc, argv, desc), vm);
+	;
+	po::variables_map vm;
+	po::store(po::parse_command_line(argc, argv, desc), vm);
 	po::notify(vm);
 
 	//osmium::handler::DynamicHandler landusehandler;
@@ -483,20 +484,20 @@ int main(int argc, char* argv[]) {
 
 	osmium::io::File input_file{vm["infile"].as<std::string>()};
 
-    osmium::area::Assembler::config_type assembler_config;
+	osmium::area::Assembler::config_type assembler_config;
 
-    osmium::TagsFilter landusefilter{false};
-    landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
-    landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
-    osmium::area::MultipolygonManager<osmium::area::Assembler> landusemp_manager{assembler_config, landusefilter};
+	osmium::TagsFilter landusefilter{false};
+	landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
+	landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
+	osmium::area::MultipolygonManager<osmium::area::Assembler> landusemp_manager{assembler_config, landusefilter};
 
-    osmium::TagsFilter buildingfilter{false};
-    buildingfilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
-    osmium::area::MultipolygonManager<osmium::area::Assembler> buildingmp_manager{assembler_config, buildingfilter};
+	osmium::TagsFilter buildingfilter{false};
+	buildingfilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
+	osmium::area::MultipolygonManager<osmium::area::Assembler> buildingmp_manager{assembler_config, buildingfilter};
 
-    // We read the input file twice. In the first pass, only relations are
-    // read and fed into the multipolygon manager.
-    osmium::relations::read_relations(input_file, landusemp_manager, buildingmp_manager);
+	// We read the input file twice. In the first pass, only relations are
+	// read and fed into the multipolygon manager.
+	osmium::relations::read_relations(input_file, landusemp_manager, buildingmp_manager);
 
 	index_type index;
 	location_handler_type location_handler{index};
