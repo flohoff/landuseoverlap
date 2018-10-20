@@ -77,12 +77,13 @@ enum {
 	SRC_RELATION,
 	SRC_WAY
 };
- 
+
 enum {
 	AREA_UNKNOWN,
 	AREA_NATURAL,
 	AREA_LANDUSE,
 	AREA_AMENITY,
+	AREA_LEISURE,
 	AREA_BUILDING
 };
 
@@ -119,6 +120,9 @@ class myArea {
 		} else if (taglist.has_key("amenity")) {
 			key="amenity";
 			areatype=AREA_AMENITY;
+		} else if (taglist.has_key("leisure")) {
+			key="leisure";
+			areatype=AREA_LEISURE;
 		} else {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
@@ -149,6 +153,10 @@ class myArea {
 			|| geometry->Within(oa->geometry.get());
 	}
 
+	bool intersects(myArea *oa) {
+		return geometry->Overlaps(oa->geometry.get());
+	}
+
 	const char *type(void ) {
 		return (osmtype == SRC_WAY) ? "way" : "relation";
 	}
@@ -160,11 +168,10 @@ class myArea {
 };
 
 class SpatiaLiteWriter : public osmium::handler::Handler {
-	gdalcpp::Layer			*m_layer_overlap;
-	gdalcpp::Layer			*m_layer_natural;
-	gdalcpp::Layer			*m_layer_building;
 	gdalcpp::Dataset		dataset;
 	osmium::geom::OGRFactory<>	m_factory{};
+
+	std::map<std::string, gdalcpp::Layer*>	layermap;
 
 	public:
 
@@ -173,12 +180,13 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 
 		dataset.exec("PRAGMA synchronous = OFF");
 
-		m_layer_overlap=addAreaOverlapLayer("overlap");
-		m_layer_natural=addAreaOverlapLayer("natural");
-		m_layer_building=addAreaOverlapLayer("building");
+		addAreaOverlapLayer("overlap");
+		addAreaOverlapLayer("natural");
+		addAreaOverlapLayer("building");
+		addAreaOverlapLayer("hierarchy");
 	}
 
-	gdalcpp::Layer *addAreaOverlapLayer(const char *name) {
+	void addAreaOverlapLayer(const char *name) {
 		gdalcpp::Layer *layer=new gdalcpp::Layer(dataset, name, wkbMultiPolygon);
 
 		layer->add_field("area1_id", OFTString, 20);
@@ -197,7 +205,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 		layer->add_field("area2_key", OFTString, 20);
 		layer->add_field("area2_value", OFTString, 20);
 
-		return layer;
+		layermap[name]=layer;
 	}
 
 	void writeMultiPolygontoLayer(gdalcpp::Layer *layer, myArea *a, myArea *b, std::unique_ptr<OGRGeometry> mpoly) {
@@ -262,7 +270,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 		}
 	}
 
-	void write_overlap(myArea *a, myArea *b) {
+	void write_overlap(myArea *a, myArea *b, const char *layername) {
 		if (!a || !b || a->geometry == nullptr || b->geometry == nullptr)
 			return;
 
@@ -276,11 +284,11 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 			intersection->dumpReadable(stdout, nullptr, nullptr);
 		}
 
-		gdalcpp::Layer		*layer=m_layer_overlap;
-		if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL) {
-			layer=m_layer_natural;
-		} else if (a->areatype == AREA_BUILDING || b->areatype == AREA_BUILDING) {
-			layer=m_layer_building;
+		gdalcpp::Layer		*layer=layermap[layername];
+
+		if (!layer) {
+			std::cerr << "Undefined references layer " << layername << std::endl;
+			abort();
 		}
 
 		writeGeometry(layer, a, b, intersection.get());
@@ -324,27 +332,30 @@ class AreaOverlapCompare {
 			return false;
 		}
 
-		bool virtual Overlaps(myArea *a, myArea *b) {
+		virtual const char *Overlaps(myArea *a, myArea *b) {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
 			 * We only want to check a -> b not b -> a again as they
 			 * will overlap too anyway.
 			 */
 			if (a->areaid >= b->areaid)
-				return false;
+				return nullptr;
 
 			if (a->areatype != AREA_LANDUSE
 				&& a->areatype != AREA_NATURAL)
-				return false;
+				return nullptr;
 
 			if (b->areatype != AREA_LANDUSE
 				&& b->areatype != AREA_NATURAL)
-				return false;
+				return nullptr;
 
-			if (a->overlaps(b))
-				return true;
+			if (a->overlaps(b)) {
+				if (a->areatype == AREA_NATURAL || b->areatype == AREA_NATURAL)
+					return "natural";
+				return "overlap";
+			}
 
-			return false;
+			return nullptr;
 		}
 };
 
@@ -356,29 +367,84 @@ class BuildingOverlap : public AreaOverlapCompare {
 			return false;
 		}
 
-		bool Overlaps(myArea *a, myArea *b) {
+		const char *Overlaps(myArea *a, myArea *b) {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
 			 * We only want to check a -> b not b -> a again as they
 			 * will overlap too anyway.
 			 */
 			if (a->areaid >= b->areaid)
-				return false;
+				return nullptr;
 
 			if (a->areatype != AREA_BUILDING ||
 				b->areatype != AREA_BUILDING)
-				return false;
+				return nullptr;
 
 			/* OSM Layer - If a roof is layer=1 dont overlap */
 			if (a->layer != b->layer)
-				return false;
+				return nullptr;
 
 			if (a->overlaps(b))
-				return true;
+				return "building";
 
-			return false;
+			return nullptr;
 		}
 };
+
+class AmenityIntersect : public AreaOverlapCompare {
+	public:
+		bool virtual Want(myArea *a) {
+			if (a->areatype == AREA_AMENITY)
+				return true;
+			if (a->areatype == AREA_LEISURE) {
+				if (strcasecmp(a->value, "nature_reserve") == 0)
+					return false;
+				return true;
+			}
+			return false;
+		}
+
+		bool Matchagainst(myArea *a) {
+			if (a->areatype == AREA_NATURAL)
+				return true;
+			if (a->areatype == AREA_LANDUSE)
+				return true;
+
+			return Want(a);
+		}
+
+		const char *Overlaps(myArea *a, myArea *b) {
+			/*
+			 * Overlapping ourselves or an id smaller than ours
+			 * We only want to check a -> b not b -> a again as they
+			 * will overlap too anyway.
+			 */
+			if (a->areaid >= b->areaid)
+				return nullptr;
+
+			if (DEBUG)
+				std::cout << "Overlaps " << std::endl
+					<< "A Id: " << a->osmid
+					<< "A Type: " << a->key
+					<< "B Id: " << b->osmid
+					<< "B Type: " << b->key
+					<< std::endl;
+
+			/* One of them needs to be an AMENITY */
+			if (!((Want(a) && Matchagainst(b))
+				|| (Want(b) && Matchagainst(a))))
+				return nullptr;
+
+			if (DEBUG)
+				std::cout << "Checking for intersection" << std::endl;
+
+			if (a->intersects(b))
+				return "hierarchy";
+
+			return nullptr;
+		}
+};
+
 
 template <typename T>
 class AreaIndex : public osmium::handler::Handler{
@@ -446,6 +512,7 @@ public:
 	void processoverlap(SpatiaLiteWriter& writer, AreaOverlapCompare& compare) {
 		std::vector<myArea*>	list;
 		list.reserve(100);
+		const char *layername;
 
 		for(auto ma : arealist) {
 
@@ -461,7 +528,9 @@ public:
 				if (DEBUG)
 					std::cout << "\tIndex returned " << oa->osmid << std::endl;
 
-				if (!compare.Overlaps(ma, oa))
+				layername=compare.Overlaps(ma, oa);
+
+				if (!layername)
 					continue;
 
 				if (DEBUG) {
@@ -470,7 +539,7 @@ public:
 					oa->dump();
 				}
 
-				writer.write_overlap(ma, oa);
+				writer.write_overlap(ma, oa, layername);
 			}
 
 			list.clear();
@@ -507,6 +576,7 @@ int main(int argc, char* argv[]) {
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"amenity"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"leisure"}});
 	osmium::area::MultipolygonManager<osmium::area::Assembler> areamp_manager{assembler_config, areafilter};
 
 	// We read the input file twice. In the first pass, only relations are
@@ -533,6 +603,9 @@ int main(int argc, char* argv[]) {
 	OGRRegisterAll();
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
+
+	AmenityIntersect	ai;
+	areahandler.processoverlap(writer, ai);
 
 	AreaOverlapCompare	luo;
 	areahandler.processoverlap(writer, luo);
