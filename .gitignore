@@ -1,0 +1,9 @@
+.*
+core
+landuseoverlap
+CMakeFiles
+CMakeCache.txt
+compile_commands.json
+Makefile
+!.gitignore
+*sqlite
