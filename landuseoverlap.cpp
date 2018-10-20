@@ -82,6 +82,7 @@ enum {
 	AREA_UNKNOWN,
 	AREA_NATURAL,
 	AREA_LANDUSE,
+	AREA_AMENITY,
 	AREA_BUILDING
 };
 
@@ -115,9 +116,13 @@ class myArea {
 		} else if (taglist.has_key("building")) {
 			key="building";
 			areatype=AREA_BUILDING;
+		} else if (taglist.has_key("amenity")) {
+			key="amenity";
+			areatype=AREA_AMENITY;
 		} else {
 			key="unknown";
 			areatype=AREA_UNKNOWN;
+			// This case segfaults later
 		}
 
 		value=strdup(taglist.get_value_by_key(key, nullptr));
@@ -296,27 +301,8 @@ class query_visitor : public si::IVisitor {
 	}
 
 	void visitData(si::IData const& d) {
-		//si::IShape* ps = nullptr;
-		//d.getShape(&ps);
-		//std::unique_ptr<si::IShape> shape(ps);
-		//; // use shape
-
-		// Region is represented as array of characters
-		uint8_t* pd = 0;
-		uint32_t size = 0;
-		d.getData(size, &pd);
-
-		AT	*ptr;
-		memcpy(&ptr, pd, sizeof(AT *));
-
-		list->push_back(ptr);
-		delete[] pd;
-
-		//std::unique_ptr<uint8_t[]> data(pd);
-		// use data
-		//std::string str(reinterpret_cast<char*>(pd));
-
-		//std::cout << "Overlap " << d.getIdentifier() << std::endl; // ID is query answer
+		uint64_t	id=d.getIdentifier();
+		list->push_back((AT *)id);
 		++m_io_found;
 	}
 
@@ -331,6 +317,13 @@ class query_visitor : public si::IVisitor {
 
 class AreaOverlapCompare {
 	public:
+		bool virtual Want(myArea *a) {
+			if (a->areatype == AREA_LANDUSE
+				|| a->areatype == AREA_NATURAL)
+				return true;
+			return false;
+		}
+
 		bool virtual Overlaps(myArea *a, myArea *b) {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
@@ -338,6 +331,14 @@ class AreaOverlapCompare {
 			 * will overlap too anyway.
 			 */
 			if (a->areaid >= b->areaid)
+				return false;
+
+			if (a->areatype != AREA_LANDUSE
+				&& a->areatype != AREA_NATURAL)
+				return false;
+
+			if (b->areatype != AREA_LANDUSE
+				&& b->areatype != AREA_NATURAL)
 				return false;
 
 			if (a->overlaps(b))
@@ -349,6 +350,12 @@ class AreaOverlapCompare {
 
 class BuildingOverlap : public AreaOverlapCompare {
 	public:
+		bool virtual Want(myArea *a) {
+			if (a->areatype == AREA_BUILDING)
+				return true;
+			return false;
+		}
+
 		bool Overlaps(myArea *a, myArea *b) {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
@@ -356,6 +363,10 @@ class BuildingOverlap : public AreaOverlapCompare {
 			 * will overlap too anyway.
 			 */
 			if (a->areaid >= b->areaid)
+				return false;
+
+			if (a->areatype != AREA_BUILDING ||
+				b->areatype != AREA_BUILDING)
 				return false;
 
 			/* OSM Layer - If a roof is layer=1 dont overlap */
@@ -414,7 +425,7 @@ public:
 	void insert(T *area) {
 		if (DEBUG)
 			std::cout << "Insert: " << area->id() << std::endl;
-		rtree->insertData(sizeof(&area), (const byte *) &area, region(area), area->id());
+		rtree->insertData(0, nullptr, region(area), (uint64_t) area);
 	}
 
 	// This callback is called by osmium::apply for each area in the data.
@@ -433,10 +444,17 @@ public:
 	}
 
 	void processoverlap(SpatiaLiteWriter& writer, AreaOverlapCompare& compare) {
+		std::vector<myArea*>	list;
+		list.reserve(100);
+
 		for(auto ma : arealist) {
-			std::vector<myArea*>	list;
+
+			if (!compare.Want(ma))
+				continue;
+
 			if (DEBUG)
 				std::cout << "Checking overlap for " << ma->osmid << std::endl;
+
 			findoverlapping(ma, &list);
 
 			for(auto oa : list) {
@@ -454,6 +472,8 @@ public:
 
 				writer.write_overlap(ma, oa);
 			}
+
+			list.clear();
 		}
 	}
 };
@@ -476,28 +496,22 @@ int main(int argc, char* argv[]) {
 
 	//osmium::handler::DynamicHandler landusehandler;
 	//landusehandler.set<AreaIndex<myArea>>();
-	AreaIndex<myArea>	landusehandler;
-
-	//osmium::handler::DynamicHandler buildinghandler;
-	//buildinghandler.set<AreaIndex<myArea>>();
-	AreaIndex<myArea>	buildinghandler;
+	AreaIndex<myArea>	areahandler;
 
 	osmium::io::File input_file{vm["infile"].as<std::string>()};
 
 	osmium::area::Assembler::config_type assembler_config;
 
-	osmium::TagsFilter landusefilter{false};
-	landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
-	landusefilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
-	osmium::area::MultipolygonManager<osmium::area::Assembler> landusemp_manager{assembler_config, landusefilter};
-
-	osmium::TagsFilter buildingfilter{false};
-	buildingfilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
-	osmium::area::MultipolygonManager<osmium::area::Assembler> buildingmp_manager{assembler_config, buildingfilter};
+	osmium::TagsFilter areafilter{false};
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"amenity"}});
+	osmium::area::MultipolygonManager<osmium::area::Assembler> areamp_manager{assembler_config, areafilter};
 
 	// We read the input file twice. In the first pass, only relations are
 	// read and fed into the multipolygon manager.
-	osmium::relations::read_relations(input_file, landusemp_manager, buildingmp_manager);
+	osmium::relations::read_relations(input_file, areamp_manager);
 
 	index_type index;
 	location_handler_type location_handler{index};
@@ -505,29 +519,24 @@ int main(int argc, char* argv[]) {
 
 	osmium::io::Reader reader{input_file};
 	osmium::apply(reader, location_handler,
-		landusehandler,
-		landusemp_manager.handler([&landusehandler](osmium::memory::Buffer&& buffer) {
-			osmium::apply(buffer, landusehandler);
-		}),
-		buildinghandler,
-		buildingmp_manager.handler([&buildinghandler](osmium::memory::Buffer&& buffer) {
-			osmium::apply(buffer, buildinghandler);
+		areahandler,
+		areamp_manager.handler([&areahandler](osmium::memory::Buffer&& buffer) {
+			osmium::apply(buffer, areahandler);
 		})
 	);
 	reader.close();
 	std::cerr << "Pass 2 done\n";
 
 	std::cerr << "Memory:\n";
-	osmium::relations::print_used_memory(std::cerr, landusemp_manager.used_memory());
-	osmium::relations::print_used_memory(std::cerr, buildingmp_manager.used_memory());
+	osmium::relations::print_used_memory(std::cerr, areamp_manager.used_memory());
 
 	OGRRegisterAll();
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
 	AreaOverlapCompare	luo;
-	landusehandler.processoverlap(writer, luo);
+	areahandler.processoverlap(writer, luo);
 
 	BuildingOverlap		bo;
-	buildinghandler.processoverlap(writer, bo);
+	areahandler.processoverlap(writer, bo);
 }
