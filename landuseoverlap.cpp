@@ -205,10 +205,12 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 		layer->add_field("area2_key", OFTString, 20);
 		layer->add_field("area2_value", OFTString, 20);
 
+		layer->add_field("style", OFTString, 20);
+
 		layermap[name]=layer;
 	}
 
-	void writeMultiPolygontoLayer(gdalcpp::Layer *layer, myArea *a, myArea *b, std::unique_ptr<OGRGeometry> mpoly) {
+	void writeMultiPolygontoLayer(gdalcpp::Layer *layer, myArea *a, myArea *b, std::unique_ptr<OGRGeometry> mpoly, const char *style) {
 		try  {
 			gdalcpp::Feature feature{*layer, std::move(mpoly)};
 
@@ -228,6 +230,8 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 			feature.set_field("area2_key", b->key);
 			feature.set_field("area2_value", b->value);
 
+			feature.set_field("style", style);
+
 			feature.add_to_layer();
 
 			std::cout
@@ -246,24 +250,24 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 		}
 	}
 
-	void writeGeometry(gdalcpp::Layer *layer, myArea *a, myArea *b, OGRGeometry *geom) {
+	void writeGeometry(gdalcpp::Layer *layer, myArea *a, myArea *b, OGRGeometry *geom, const char *style) {
 		switch(geom->getGeometryType()) {
 			case(wkbMultiPolygon): {
 				std::unique_ptr<OGRGeometry>	g{geom->clone()};
-				writeMultiPolygontoLayer(layer, a, b, std::move(g));
+				writeMultiPolygontoLayer(layer, a, b, std::move(g), style);
 				break;
 			}
 			case(wkbPolygon): {
 				std::unique_ptr<OGRMultiPolygon> mpoly{new OGRMultiPolygon()};
 				mpoly->addGeometry(geom);
-				writeMultiPolygontoLayer(layer, a, b, std::move(mpoly));
+				writeMultiPolygontoLayer(layer, a, b, std::move(mpoly), style);
 				break;
 			}
 			case(wkbGeometryCollection): {
 				OGRGeometryCollection	*collection=(OGRGeometryCollection *) geom;
 				for(int i=0;i<collection->getNumGeometries();i++) {
 					OGRGeometry *sub=collection->getGeometryRef(i);
-					writeGeometry(layer, a, b, sub);
+					writeGeometry(layer, a, b, sub, style);
 					break;
 				}
 			}
@@ -291,7 +295,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 			abort();
 		}
 
-		writeGeometry(layer, a, b, intersection.get());
+		writeGeometry(layer, a, b, intersection.get(), layername);
 	}
 };
 
@@ -338,7 +342,7 @@ class AreaOverlapCompare {
 			 * We only want to check a -> b not b -> a again as they
 			 * will overlap too anyway.
 			 */
-			if (a->areaid >= b->areaid)
+			if ((a->areaid >= b->areaid))
 				return nullptr;
 
 			if (a->areatype != AREA_LANDUSE
@@ -419,7 +423,8 @@ class AmenityIntersect : public AreaOverlapCompare {
 			 * We only want to check a -> b not b -> a again as they
 			 * will overlap too anyway.
 			 */
-			if (a->areaid >= b->areaid)
+			if ((a->areaid >= b->areaid) &&
+				(a->areatype == b->areatype))
 				return nullptr;
 
 			if (DEBUG)
