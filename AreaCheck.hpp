@@ -3,15 +3,23 @@
 
 #include "Area.hpp"
 
-class AreaProcess {
+class AreaWant {
 	public:
-	virtual bool Want(Area *a) const = 0;
+	virtual bool WantA(Area *a) const = 0;
+	virtual bool WantB(Area *a) const = 0;
+};
+
+class AreaProcess : public AreaWant {
+	public:
+	virtual bool WantA(Area *a) const = 0;
+	virtual bool WantB(Area *a) const = 0;
 	virtual const char *Process(Area *a) const = 0;
 };
 
-class AreaCompare {
+class AreaCompare : public AreaWant {
 	public:
-	virtual bool Want(Area *a) const = 0;
+	virtual bool WantA(Area *a) const = 0;
+	virtual bool WantB(Area *a) const = 0;
 	virtual const char *Overlaps(Area *a, Area *b) const = 0;
 };
 

@@ -40,11 +40,15 @@ using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
 class AreaOverlapCompare : public AreaCompare {
 	public:
-		virtual bool Want(Area *a) const {
+		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_LANDUSE
 				|| a->osm_type == AREA_NATURAL)
 				return true;
 			return false;
+		}
+
+		virtual bool WantB(Area *a) const {
+			return WantA(a);
 		}
 
 		virtual const char *Overlaps(Area *a, Area *b) const {
@@ -76,10 +80,14 @@ class AreaOverlapCompare : public AreaCompare {
 
 class BuildingOverlap : public AreaOverlapCompare {
 	public:
-		virtual bool Want(Area *a) {
+		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_BUILDING)
 				return true;
 			return false;
+		}
+
+		virtual bool WantB(Area *a) const {
+			return WantA(a);
 		}
 
 		virtual const char *Overlaps(Area *a, Area *b) {
@@ -108,7 +116,7 @@ class BuildingOverlap : public AreaOverlapCompare {
 
 class AmenityIntersect : public AreaOverlapCompare {
 	public:
-		virtual bool Want(Area *a) const {
+		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_AMENITY)
 				return true;
 			if (a->osm_type == AREA_LEISURE) {
@@ -119,13 +127,13 @@ class AmenityIntersect : public AreaOverlapCompare {
 			return false;
 		}
 
-		bool Matchagainst(Area *a) const {
+		bool WantB(Area *a) const {
 			if (a->osm_type == AREA_NATURAL)
 				return true;
 			if (a->osm_type == AREA_LANDUSE)
 				return true;
 
-			return Want(a);
+			return WantA(a);
 		}
 
 		const char *Overlaps(Area *a, Area *b) const {
@@ -147,15 +155,16 @@ class AmenityIntersect : public AreaOverlapCompare {
 					<< std::endl;
 
 			/* One of them needs to be an AMENITY */
-			if (!((Want(a) && Matchagainst(b))
-				|| (Want(b) && Matchagainst(a))))
+			if (!((WantA(a) && WantB(b))
+				|| (WantA(b) && WantB(a))))
 				return nullptr;
 
 			if (DEBUG)
 				std::cout << "Checking for intersection" << std::endl;
 
-			if (a->intersects(b))
+			if (a->intersects(b)) {
 				return "hierarchy";
+			}
 
 			return nullptr;
 		}
@@ -163,10 +172,14 @@ class AmenityIntersect : public AreaOverlapCompare {
 
 class LanduseSize : public AreaProcess {
 	public:
-		bool Want(Area *a) const {
+		bool WantA(Area *a) const {
 			if (a->osm_type == AREA_LANDUSE)
 				return true;
 			return false;
+		}
+
+		bool WantB(Area *a) const {
+			return WantA(a);
 		}
 
 		const char *Process(Area *a) const {

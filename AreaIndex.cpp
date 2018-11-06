@@ -17,28 +17,24 @@ namespace si = SpatialIndex;
 template <typename AT>
 class query_visitor : public si::IVisitor {
 	std::vector<AT*>	*list;
+	AreaWant&		want;
 
 	public:
 
-	query_visitor(std::vector<AT*> *l) : list(l), m_io_index(0), m_io_leaf(0), m_io_found(0) {}
+	query_visitor(std::vector<AT*> *l, AreaWant& want) : list(l), want(want){}
 
 	void visitNode(si::INode const& n) {
-		n.isLeaf() ? ++m_io_leaf : ++m_io_index;
 	}
 
 	void visitData(si::IData const& d) {
 		uint64_t	id=d.getIdentifier();
-		list->push_back((AT *)id);
-		++m_io_found;
+		if (want.WantB((AT *)id))
+			list->push_back((AT *)id);
 	}
 
 	void visitData(std::vector<si::IData const*>& v) {
 		assert(!v.empty()); (void)v;
 	}
-
-	size_t m_io_index;
-	size_t m_io_leaf;
-	size_t m_io_found;
 };
 
 si::Region AreaIndex::region(Area *area) {
@@ -62,8 +58,8 @@ AreaIndex::AreaIndex() {
 	oSRS.importFromEPSG(4326);
 }
 
-void AreaIndex::findoverlapping(Area *area, std::vector<Area*> *list) {
-	query_visitor<Area> qvisitor{list};
+void AreaIndex::findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want) {
+	query_visitor<Area> qvisitor{list, want};
 	rtree->intersectsWithQuery(region(area), qvisitor);
 }
 
@@ -94,7 +90,7 @@ void AreaIndex::area(const osmium::Area& area) {
 void AreaIndex::foreach(SpatiaLiteWriter& writer, AreaProcess& compare) {
 	const char *layername;
 	for(auto ma : arealist) {
-		if (!compare.Want(ma))
+		if (!compare.WantA(ma))
 			continue;
 
 		layername=compare.Process(ma);
@@ -111,13 +107,13 @@ void AreaIndex::processoverlap(SpatiaLiteWriter& writer, AreaCompare& compare) {
 
 	for(auto ma : arealist) {
 
-		if (!compare.Want(ma))
+		if (!compare.WantA(ma))
 			continue;
 
 		if (DEBUG)
 			std::cout << "Checking overlap for " << ma->osm_id << std::endl;
 
-		findoverlapping(ma, &list);
+		findoverlapping(ma, &list, compare);
 
 		for(auto oa : list) {
 			if (DEBUG)
