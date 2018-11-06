@@ -24,6 +24,7 @@
 #include <osmium/index/map/flex_mem.hpp>
 
 #include <boost/program_options.hpp>
+#include <boost/format.hpp>
 
 #include "SpatiaLiteWriter.hpp"
 #include "Area.hpp"
@@ -182,19 +183,22 @@ class LanduseSize : public AreaProcess {
 			return WantA(a);
 		}
 
-		const char *Process(Area *a) const {
-
+		void Process(Area *a, SpatiaLiteWriter& writer) const {
 			float as=a->area();
 
 			if (as < 40) {
-				std::cout << "Way id " << a->osm_id << " Area size " << as << std::endl;
+				std::string s=boost::str(boost::format("Small landuse  %1%m² below 40m²") % as);
+				writer.writeAreaLayer("suspicious", a, "lsize1", s.c_str());
+			} else if (as < 100) {
+				std::string s=boost::str(boost::format("Small landuse  %1%m² below 100m²") % as);
+				writer.writeAreaLayer("suspicious", a, "lsize2", s.c_str());
+			} else if (as > 400000) {
+				std::string s=boost::str(boost::format("Huge landuse %1%m² > 400000m²") % as);
+				writer.writeAreaLayer("huge", a, "huge2", s.c_str());
+			} else if (as > 200000) {
+				std::string s=boost::str(boost::format("Large landuse %1%m² > 200000m²") % as);
+				writer.writeAreaLayer("huge", a, "huge1", s.c_str());
 			}
-
-			if (as > 200000) {
-				std::cout << "Way id " << a->osm_id << " Area size " << as << std::endl;
-			}
-
-			return nullptr;
 		}
 };
 

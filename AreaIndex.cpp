@@ -89,14 +89,13 @@ void AreaIndex::area(const osmium::Area& area) {
 
 void AreaIndex::foreach(SpatiaLiteWriter& writer, AreaProcess& compare) {
 	const char *layername;
+	const char *errormsg;
+	const char *style;
 	for(auto ma : arealist) {
 		if (!compare.WantA(ma))
 			continue;
 
-		layername=compare.Process(ma);
-
-		if (!layername)
-			continue;
+		compare.Process(ma, writer);
 	}
 }
 
