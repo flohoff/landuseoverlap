@@ -172,7 +172,13 @@ class AmenityIntersect : public AreaOverlapCompare {
 };
 
 class LanduseSize : public AreaProcess {
+	OGRSpatialReference	tSRS;
+
 	public:
+		LanduseSize(void ) {
+			tSRS.importFromEPSG(31467);
+		}
+
 		bool WantA(Area *a) const {
 			if (a->osm_type == AREA_LANDUSE)
 				return true;
@@ -183,22 +189,54 @@ class LanduseSize : public AreaProcess {
 			return WantA(a);
 		}
 
-		void Process(Area *a, SpatiaLiteWriter& writer) const {
-			float as=a->area();
+		float polygon_area(OGRGeometry *geom) const {
+			switch(geom->getGeometryType()) {
+				case(wkbPolygon): {
+					return static_cast<const OGRPolygon*>(geom)->get_Area();
+				}
+				case(wkbMultiPolygon): {
+					return static_cast<const OGRMultiPolygon*>(geom)->get_Area();
+				}
+				default: {
+					break;
+				};
+			}
+			return 0;
+		}
 
-			if (as < 40) {
-				std::string s=boost::str(boost::format("Small landuse  %1%m² below 40m²") % as);
+		void Process(Area *a, SpatiaLiteWriter& writer) const {
+			OGRGeometry	*geom=a->geometry->clone();
+			geom->transformTo((OGRSpatialReference *) &tSRS);
+
+			float areasize=polygon_area(geom);
+
+			if (areasize < 40) {
+				std::string s=boost::str(boost::format("Small landuse  %1$.2fm² below 40m²") % areasize);
 				writer.writeAreaLayer("suspicious", a, "lsize1", s.c_str());
-			} else if (as < 100) {
-				std::string s=boost::str(boost::format("Small landuse  %1%m² below 100m²") % as);
+			} else if (areasize < 100) {
+				std::string s=boost::str(boost::format("Small landuse  %1$.2fm² below 100m²") % areasize);
 				writer.writeAreaLayer("suspicious", a, "lsize2", s.c_str());
-			} else if (as > 400000) {
-				std::string s=boost::str(boost::format("Huge landuse %1%m² > 400000m²") % as);
+			} else if (areasize > 400000) {
+				std::string s=boost::str(boost::format("Huge landuse %1$.0fm² > 400000m²") % areasize);
 				writer.writeAreaLayer("huge", a, "huge2", s.c_str());
-			} else if (as > 200000) {
-				std::string s=boost::str(boost::format("Large landuse %1%m² > 200000m²") % as);
+			} else if (areasize > 200000) {
+				std::string s=boost::str(boost::format("Large landuse %1$.0fm² > 200000m²") % areasize);
 				writer.writeAreaLayer("huge", a, "huge1", s.c_str());
 			}
+
+			if (areasize > 1000) {
+				OGRGeometry	*hull=geom->ConvexHull();
+				float		hullsize=polygon_area(hull);
+
+				if (hullsize > 2*areasize) {
+					std::string s=boost::str(boost::format("Convexhull size %1$.1fm² is twice the size of the landuse size  %2$.2fm²") % hullsize % areasize);
+					writer.writeAreaLayer("suspicious", a, "hullsize50", s.c_str());
+				}
+
+				delete(hull);
+			}
+
+			delete(geom);
 		}
 };
 

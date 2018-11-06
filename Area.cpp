@@ -66,32 +66,6 @@ const char *Area::source_string(void ) {
 	return (source == SRC_WAY) ? "way" : "relation";
 }
 
-float Area::area(void ) {
-	OGRGeometry		*geom=geometry->clone();
-	float			area=0;
-	OGRSpatialReference	tSRS;
-
-	tSRS.importFromEPSG(31467);
-	geom->transformTo(&tSRS);
-
-	switch(geom->getGeometryType()) {
-		case(wkbPolygon): {
-			area=static_cast<const OGRPolygon*>(geom)->get_Area();
-			break;
-		}
-		case(wkbMultiPolygon): {
-			area=static_cast<const OGRMultiPolygon*>(geom)->get_Area();
-			break;
-		}
-		default: {
-			area=0;
-		};
-	}
-
-	delete(geom);
-	return area;
-}
-
 void Area::dump(void ) {
 	std::cout << " Dump of area id " << id << " from OSM id " << osm_id << " type " << (int) source << std::endl;
 	geometry->dumpReadable(stdout, nullptr, nullptr);

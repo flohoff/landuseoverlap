@@ -41,7 +41,6 @@ class Area {
 	bool overlaps(Area *oa);
 	bool intersects(Area *oa);
 	const char *source_string(void);
-	float area(void);
 	void dump(void );
 };
 
