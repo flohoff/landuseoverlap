@@ -24,7 +24,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package(PkgConfig)
 pkg_check_modules(LSI REQUIRED libspatialindex)
 
-add_executable(landuseoverlap landuseoverlap.cpp)
+add_executable(landuseoverlap landuseoverlap.cpp SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
 include_directories("${OSMIUM_INCLUDE_DIRS}")
 include_directories(${Boost_INCLUDE_DIRS} ${LSI_INCLUDE_DIRS})
 target_link_libraries(landuseoverlap ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES} ${LSI_LIBRARIES})
