@@ -64,6 +64,7 @@ SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname) :
 
 	addAreaLayer("huge");
 	addAreaLayer("suspicious");
+	addAreaLayer("complex");
 }
 
 void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, Area *b, std::unique_ptr<OGRGeometry> mpoly, const char *style) {

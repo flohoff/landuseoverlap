@@ -204,9 +204,91 @@ class LanduseSize : public AreaProcess {
 			return 0;
 		}
 
+		double distance(const OGRPoint& a, const OGRPoint& b) const {
+			return a.Distance((OGRGeometry *)&b);
+		}
+
+		double polygon_complexity(const OGRGeometry *geom) const {
+			double			complexity=0;
+
+			switch(geom->getGeometryType()) {
+				case(wkbLineString): {
+					const OGRLineString	*ring=static_cast<const OGRLineString*>(geom);
+					int numpoints=ring->getNumPoints();
+
+					// Summe der innenwinkel im dreieck
+					if (numpoints <= 3)
+						return 180;
+					// Summe der innenwinkel im rechteck
+					if (numpoints == 4)
+						return 360;
+
+					if (DEBUG)
+						std::cout << "Looping on points" << std::endl;
+
+					for(int i=0;i<numpoints;i++) {
+						OGRPoint	Pa,Pb,Pc;
+
+						ring->getPoint(i%(numpoints-1), &Pa);
+						ring->getPoint((i+1)%(numpoints-1), &Pb);
+						ring->getPoint((i+2)%(numpoints-1), &Pc);
+
+						double a=distance(Pa, Pb);
+						double b=distance(Pb, Pc);
+						double c=distance(Pc, Pa);
+
+						double rad=acos((a*a+b*b-c*c)/(2*a*b));
+						double angle=rad*(180/3.1415926);
+
+						if (DEBUG) {
+							std::cout
+								<< " Pa.X " << Pa.getX()
+								<< " Pa.Y " << Pa.getY()
+								<< " a " << a
+								<< " b " << c
+								<< " c " << a
+								<< " rad " << rad
+								<< " angle " << angle
+								<< std::endl;
+						}
+
+						complexity+=(180-angle);
+					}
+					break;
+				}
+				case(wkbPolygon): {
+					const OGRLinearRing	*lr=static_cast<const OGRPolygon*>(geom)->getExteriorRing();
+					complexity+=polygon_complexity(lr);
+					break;
+				}
+				case(wkbMultiPolygon): {
+					const OGRMultiPolygon *mp=static_cast<const OGRMultiPolygon*>(geom);
+					int numgeom=mp->getNumGeometries();
+
+					for(int i=0;i<numgeom;i++) {
+						const OGRGeometry *subgeom=mp->getGeometryRef(i);
+						complexity+=polygon_complexity(subgeom);
+					}
+					break;
+				}
+				default: {
+					std::cout << "Unknown geometry type " << geom->getGeometryName()
+						<< "(" << geom->getGeometryType() << ")" << std::endl;
+				};
+			}
+
+			return complexity;
+		}
+
 		void Process(Area *a, SpatiaLiteWriter& writer) const {
 			OGRGeometry	*geom=a->geometry->clone();
 			geom->transformTo((OGRSpatialReference *) &tSRS);
+
+			double complexity=polygon_complexity(geom);
+			if (complexity > 2000) {
+				std::string s=boost::str(boost::format("Complexity %1$.1f") % complexity);
+				writer.writeAreaLayer("complex", a, "complex", s.c_str());
+			}
 
 			float areasize=polygon_area(geom);
 
@@ -222,18 +304,6 @@ class LanduseSize : public AreaProcess {
 			} else if (areasize > 200000) {
 				std::string s=boost::str(boost::format("Large landuse %1$.0fm² > 200000m²") % areasize);
 				writer.writeAreaLayer("huge", a, "huge1", s.c_str());
-			}
-
-			if (areasize > 1000) {
-				OGRGeometry	*hull=geom->ConvexHull();
-				float		hullsize=polygon_area(hull);
-
-				if (hullsize > 2*areasize) {
-					std::string s=boost::str(boost::format("Convexhull size %1$.1fm² is twice the size of the landuse size  %2$.2fm²") % hullsize % areasize);
-					writer.writeAreaLayer("suspicious", a, "hullsize50", s.c_str());
-				}
-
-				delete(hull);
 			}
 
 			delete(geom);
