@@ -318,12 +318,18 @@ int main(int argc, char* argv[]) {
 	po::options_description         desc("Allowed options");
 	desc.add_options()
 		("help,h", "produce help message")
-		("infile,i", po::value<std::string>(), "Input file")
-		("dbname,d", po::value<std::string>(), "Output database name")
+		("infile,i", po::value<std::string>()->required(), "Input file")
+		("dbname,d", po::value<std::string>()->required(), "Output database name")
 	;
-	po::variables_map vm;
-	po::store(po::parse_command_line(argc, argv, desc), vm);
-	po::notify(vm);
+
+        po::variables_map vm;
+        try {
+                po::store(po::parse_command_line(argc, argv, desc), vm);
+                po::notify(vm);
+        } catch(const boost::program_options::error& e) {
+                std::cerr << "Error: " << e.what() << "\n";
+                exit(-1);
+        }
 
 	AreaIndex	areahandler;
 
