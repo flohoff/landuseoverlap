@@ -120,6 +120,16 @@ class AmenityIntersect : public AreaOverlapCompare {
 		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_AMENITY)
 				return true;
+			if (a->osm_type == AREA_MANMADE) {
+
+				/* Overlapping types - by default */
+				if (strcasecmp(a->osm_value, "pier") == 0)
+					return false;
+				if (strcasecmp(a->osm_value, "bridge") == 0)
+					return false;
+
+				return true;
+			}
 			if (a->osm_type == AREA_LEISURE) {
 				if (strcasecmp(a->osm_value, "nature_reserve") == 0)
 					return false;
@@ -344,6 +354,7 @@ int main(int argc, char* argv[]) {
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"amenity"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"leisure"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"man_made"}});
 	osmium::area::MultipolygonManager<osmium::area::Assembler> areamp_manager{assembler_config, areafilter};
 
 	// We read the input file twice. In the first pass, only relations are

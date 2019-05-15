@@ -32,6 +32,9 @@ Area::Area(std::unique_ptr<OGRGeometry> geom, uint8_t otype, const osmium::Area 
 	} else if (taglist.has_key("leisure")) {
 		osm_key="leisure";
 		osm_type=AREA_LEISURE;
+	} else if (taglist.has_key("man_made")) {
+		osm_key="man_made";
+		osm_type=AREA_MANMADE;
 	} else {
 		osm_key="unknown";
 		osm_type=AREA_UNKNOWN;
