@@ -327,7 +327,8 @@ int main(int argc, char* argv[]) {
                 po::store(po::parse_command_line(argc, argv, desc), vm);
                 po::notify(vm);
         } catch(const boost::program_options::error& e) {
-                std::cerr << "Error: " << e.what() << "\n";
+                std::cerr << "Error: " << e.what() << std::endl;
+		std::cerr << desc << std::endl;
                 exit(-1);
         }
 
