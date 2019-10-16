@@ -135,6 +135,9 @@ class AmenityIntersect : public AreaOverlapCompare {
 					return false;
 				return true;
 			}
+			if (a->osm_type == AREA_BUILDING) {
+				return true;
+			}
 			return false;
 		}
 
