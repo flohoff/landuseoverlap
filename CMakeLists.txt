@@ -1,6 +1,14 @@
 cmake_minimum_required (VERSION 2.6)
 project (osmium_area_test)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+set(CMAKE_CXX_FLAGS "-Wall -Wextra")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+
 set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
@@ -24,7 +32,7 @@ include_directories(${Boost_INCLUDE_DIRS})
 find_package(PkgConfig)
 pkg_check_modules(LSI REQUIRED libspatialindex)
 
-add_executable(landuseoverlap landuseoverlap.cpp)
+add_executable(landuseoverlap landuseoverlap.cpp SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
 include_directories("${OSMIUM_INCLUDE_DIRS}")
 include_directories(${Boost_INCLUDE_DIRS} ${LSI_INCLUDE_DIRS})
 target_link_libraries(landuseoverlap ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES} ${LSI_LIBRARIES})
