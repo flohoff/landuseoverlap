@@ -118,6 +118,10 @@ class BuildingOverlap : public AreaOverlapCompare {
 class AmenityIntersect : public AreaOverlapCompare {
 	public:
 		virtual bool WantA(Area *a) const {
+			if (a->osm_type == AREA_NATURAL)
+				return true;
+			if (a->osm_type == AREA_LANDUSE)
+				return true;
 			if (a->osm_type == AREA_AMENITY)
 				return true;
 			if (a->osm_type == AREA_MANMADE) {
@@ -142,11 +146,6 @@ class AmenityIntersect : public AreaOverlapCompare {
 		}
 
 		bool WantB(Area *a) const {
-			if (a->osm_type == AREA_NATURAL)
-				return true;
-			if (a->osm_type == AREA_LANDUSE)
-				return true;
-
 			return WantA(a);
 		}
 
@@ -177,6 +176,14 @@ class AmenityIntersect : public AreaOverlapCompare {
 				std::cout << "Checking for intersection" << std::endl;
 
 			if (a->intersects(b)) {
+
+				/* Building may be layer - Then ignore */
+				if (a->osm_type == AREA_BUILDING
+					&& b->osm_type == AREA_BUILDING
+					&& a->osm_layer != b->osm_layer) {
+					return nullptr;
+				}
+
 				return "hierarchy";
 			}
 
