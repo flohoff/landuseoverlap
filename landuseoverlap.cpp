@@ -176,6 +176,14 @@ class AmenityIntersect : public AreaOverlapCompare {
 				std::cout << "Checking for intersection" << std::endl;
 
 			if (a->intersects(b)) {
+
+				/* Building may be layer - Then ignore */
+				if (a->osm_type == AREA_BUILDING
+					&& b->osm_type == AREA_BUILDING
+					&& a->osm_layer != b->osm_layer) {
+					return nullptr;
+				}
+
 				return "hierarchy";
 			}
 
