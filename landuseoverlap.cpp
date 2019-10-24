@@ -118,6 +118,10 @@ class BuildingOverlap : public AreaOverlapCompare {
 class AmenityIntersect : public AreaOverlapCompare {
 	public:
 		virtual bool WantA(Area *a) const {
+			if (a->osm_type == AREA_NATURAL)
+				return true;
+			if (a->osm_type == AREA_LANDUSE)
+				return true;
 			if (a->osm_type == AREA_AMENITY)
 				return true;
 			if (a->osm_type == AREA_MANMADE) {
@@ -142,11 +146,6 @@ class AmenityIntersect : public AreaOverlapCompare {
 		}
 
 		bool WantB(Area *a) const {
-			if (a->osm_type == AREA_NATURAL)
-				return true;
-			if (a->osm_type == AREA_LANDUSE)
-				return true;
-
 			return WantA(a);
 		}
 
