@@ -141,11 +141,13 @@ class AmenityIntersect : public AreaOverlapCompare {
 
 			if (a->intersects(b)) {
 
-				/* Building may be layer - Then ignore */
+				/* if a builing overlaps something - check layers */
 				if (a->osm_type == AREA_BUILDING
-					&& b->osm_type == AREA_BUILDING
-					&& a->osm_layer != b->osm_layer) {
-					return nullptr;
+					|| b->osm_type == AREA_BUILDING) {
+
+					if (a->osm_layer != b->osm_layer) {
+						return nullptr;
+					}
 				}
 
 				return "hierarchy";
