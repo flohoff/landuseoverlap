@@ -79,42 +79,6 @@ class AreaOverlapCompare : public AreaCompare {
 		}
 };
 
-class BuildingOverlap : public AreaOverlapCompare {
-	public:
-		virtual bool WantA(Area *a) const {
-			if (a->osm_type == AREA_BUILDING)
-				return true;
-			return false;
-		}
-
-		virtual bool WantB(Area *a) const {
-			return WantA(a);
-		}
-
-		virtual const char *Overlaps(Area *a, Area *b) {
-			/*
-			 * Overlapping ourselves or an id smaller than ours
-			 * We only want to check a -> b not b -> a again as they
-			 * will overlap too anyway.
-			 */
-			if (a->id >= b->id)
-				return nullptr;
-
-			if (a->osm_type != AREA_BUILDING ||
-				b->osm_type != AREA_BUILDING)
-				return nullptr;
-
-			/* OSM Layer - If a roof is layer=1 dont overlap */
-			if (a->osm_layer != b->osm_layer)
-				return nullptr;
-
-			if (a->overlaps(b))
-				return "building";
-
-			return nullptr;
-		}
-};
-
 class AmenityIntersect : public AreaOverlapCompare {
 	public:
 		virtual bool WantA(Area *a) const {
@@ -400,8 +364,5 @@ int main(int argc, char* argv[]) {
 
 	AreaOverlapCompare	luo;
 	areahandler.processoverlap(writer, luo);
-
-	BuildingOverlap		bo;
-	areahandler.processoverlap(writer, bo);
 
 }
