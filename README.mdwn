@@ -37,3 +37,4 @@ Fetch a pbf extract for example from http://download.geofabrik.de then run:
 Output on stdout will be one problem per line. The sqlite is to be used with
 [spatialite-rest](https://github.com/flohoff/spatialite-rest).
 
+
