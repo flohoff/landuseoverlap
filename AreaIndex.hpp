@@ -31,6 +31,6 @@ public:
 	void findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want);
 	void insert(Area *area);
 	void area(const osmium::Area& area);
-	void foreach(SpatiaLiteWriter& writer, AreaProcess& compare);
-	void processoverlap(SpatiaLiteWriter& writer, AreaCompare& compare);
+	void foreach(AreaProcess& compare);
+	void processoverlap(AreaCompare& compare);
 };
