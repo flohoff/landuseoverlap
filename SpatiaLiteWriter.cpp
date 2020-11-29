@@ -58,7 +58,7 @@ void SpatiaLiteWriter::addAreaLayer(const char *name) {
 SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname) :
 		dataset("sqlite", dbname, gdalcpp::SRS{}, {"SPATIALITE=TRUE", "INIT_WITH_EPSG=no"}) {
 
-	dataset.exec("PRAGMA synchronous = OFF");
+	dataset.enable_auto_transactions();
 }
 
 void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, Area *b, std::unique_ptr<OGRGeometry> mpoly, const char *style) {
