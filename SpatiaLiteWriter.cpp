@@ -94,7 +94,7 @@ void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, 
 				<< a->osm_user << "," << b->osm_user
 				<< std::endl;
 
-	} catch (gdalcpp::gdal_error) {
+	} catch (const gdalcpp::gdal_error& e) {
 		std::cerr << "gdal_error while creating feature " << std::endl;
 	}
 }
@@ -175,7 +175,7 @@ void SpatiaLiteWriter::writeAreaLayer(const char *layername, Area *a, const char
 				<< " error " << errormsg
 				<< std::endl;
 
-	} catch (gdalcpp::gdal_error) {
+	} catch (const gdalcpp::gdal_error& e) {
 		std::cerr << "gdal_error while creating feature " << std::endl;
 	}
 }
