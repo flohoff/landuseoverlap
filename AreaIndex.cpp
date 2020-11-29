@@ -82,7 +82,7 @@ void AreaIndex::area(const osmium::Area& area) {
 		arealist.push_back(a);
 	} catch (const osmium::geometry_error& e) {
 		std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
-	} catch (osmium::invalid_location) {
+	} catch (const osmium::invalid_location& e) {
 		std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
 	}
 }
