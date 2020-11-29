@@ -1,0 +1,40 @@
+
+`landuseoverlap` analyses overlapping areas of different kinds. 
+
+[![Build Status](https://travis-ci.com/flohoff/landuseoverlap.svg?branch=master)](https://travis-ci.com/flohoff/landuseoverlap)
+
+There will be different layers in the resulting sqlite file.
+
+* complex - Lists landuses/naturals with a high inner angular 
+* hierarchy - Partial overlap between landuse/natural and other areas e.g. amenity/building/leisure
+* huge - Very large landuses (greater 200ha)
+* natural - Overlap between landuse and natural
+* overlap - Overlapping or containing landuse 
+* suspicious - Very small landuses (less than 100m²)
+
+See <https://osm.zz.de/dbview/?db=landuseoverlap-nrw&layer=hierarchy#51.58133,7.48233,14z> as an example
+
+Building
+========
+
+Building is only tested on Debian/Buster x86_64 but Ubuntu 18.04 should work aswell:
+
+	apt-get -fuy install build-essential cmake libboost-dev git libgdal-dev libbz2-dev libexpat1-dev \
+		libsparsehash-dev libboost-program-options-dev libgeos++-dev libproj-dev libspatialindex-dev
+    
+	cd landuseoverlap
+	git submodule update --init
+	cmake .
+	make
+
+Running
+=======
+
+Fetch a pbf extract for example from http://download.geofabrik.de then run:
+
+	./landuseoverlap -i mylittle.pbf -d output.sqlite 
+
+Output on stdout will be one problem per line. The sqlite is to be used with
+[spatialite-rest](https://github.com/flohoff/spatialite-rest).
+
+

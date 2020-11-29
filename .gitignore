@@ -6,4 +6,5 @@ CMakeCache.txt
 compile_commands.json
 Makefile
 !.gitignore
+!.travis.yml
 *sqlite

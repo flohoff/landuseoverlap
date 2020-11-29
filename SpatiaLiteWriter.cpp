@@ -2,10 +2,13 @@
 
 #include <osmium/area/assembler.hpp>
 #include <osmium/geom/ogr.hpp>
+//#define BOOST_STACKTRACE_USE_ADDR2LINE
+#include <boost/stacktrace.hpp>
 #include <gdalcpp.hpp>
 
 #include "Area.hpp"
 #include "SpatiaLiteWriter.hpp"
+#include <iostream>
 
 #define DEBUG	0
 
@@ -55,16 +58,7 @@ void SpatiaLiteWriter::addAreaLayer(const char *name) {
 SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname) :
 		dataset("sqlite", dbname, gdalcpp::SRS{}, {"SPATIALITE=TRUE", "INIT_WITH_EPSG=no"}) {
 
-	dataset.exec("PRAGMA synchronous = OFF");
-
-	addAreaOverlapLayer("overlap");
-	addAreaOverlapLayer("natural");
-	addAreaOverlapLayer("building");
-	addAreaOverlapLayer("hierarchy");
-
-	addAreaLayer("huge");
-	addAreaLayer("suspicious");
-	addAreaLayer("complex");
+	dataset.enable_auto_transactions();
 }
 
 void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, Area *b, std::unique_ptr<OGRGeometry> mpoly, const char *style) {
@@ -127,6 +121,9 @@ void SpatiaLiteWriter::writeGeometry(gdalcpp::Layer *layer, Area *a, Area *b, OG
 				writeGeometry(layer, a, b, sub, style);
 				break;
 			}
+		}
+		default: {
+			break;
 		}
 	}
 }

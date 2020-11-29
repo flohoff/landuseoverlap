@@ -82,27 +82,23 @@ void AreaIndex::area(const osmium::Area& area) {
 		arealist.push_back(a);
 	} catch (const osmium::geometry_error& e) {
 		std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
-	} catch (osmium::invalid_location) {
+	} catch (const osmium::invalid_location& e) {
 		std::cerr << "Invalid location way id " << area.orig_id() << std::endl;
 	}
 }
 
-void AreaIndex::foreach(SpatiaLiteWriter& writer, AreaProcess& compare) {
-	const char *layername;
-	const char *errormsg;
-	const char *style;
+void AreaIndex::foreach(AreaProcess& compare) {
 	for(auto ma : arealist) {
 		if (!compare.WantA(ma))
 			continue;
 
-		compare.Process(ma, writer);
+		compare.Process(ma);
 	}
 }
 
-void AreaIndex::processoverlap(SpatiaLiteWriter& writer, AreaCompare& compare) {
+void AreaIndex::processoverlap(AreaCompare& compare) {
 	std::vector<Area*>	list;
 	list.reserve(100);
-	const char *layername;
 
 	for(auto ma : arealist) {
 
@@ -118,18 +114,7 @@ void AreaIndex::processoverlap(SpatiaLiteWriter& writer, AreaCompare& compare) {
 			if (DEBUG)
 				std::cout << "\tIndex returned " << oa->osm_id << std::endl;
 
-			layername=compare.Overlaps(ma, oa);
-
-			if (!layername)
-				continue;
-
-			if (DEBUG) {
-				std::cout << "\t\tPolygon overlaps " << oa->osm_id << std::endl;
-				ma->dump();
-				oa->dump();
-			}
-
-			writer.write_overlap(ma, oa, layername);
+			compare.Overlaps(ma, oa);
 		}
 
 		list.clear();

@@ -41,6 +41,11 @@ using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
 
 class AreaOverlapCompare : public AreaCompare {
 	public:
+		AreaOverlapCompare(SpatiaLiteWriter& writer) : AreaCompare(writer) {
+			writer.addAreaOverlapLayer("overlap");
+			writer.addAreaOverlapLayer("natural");
+		};
+
 		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_LANDUSE
 				|| a->osm_type == AREA_NATURAL)
@@ -52,71 +57,41 @@ class AreaOverlapCompare : public AreaCompare {
 			return WantA(a);
 		}
 
-		virtual const char *Overlaps(Area *a, Area *b) const {
+		virtual void Overlaps(Area *a, Area *b) const {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
 			 * We only want to check a -> b not b -> a again as they
 			 * will overlap too anyway.
 			 */
 			if ((a->id >= b->id))
-				return nullptr;
+				return;
 
 			if (a->osm_type != AREA_LANDUSE
 				&& a->osm_type != AREA_NATURAL)
-				return nullptr;
+				return;
 
 			if (b->osm_type != AREA_LANDUSE
 				&& b->osm_type != AREA_NATURAL)
-				return nullptr;
+				return;
 
 			if (a->overlaps(b)) {
 				if (a->osm_type == AREA_NATURAL || b->osm_type == AREA_NATURAL)
-					return "natural";
-				return "overlap";
+					writer.write_overlap(a, b, "natural");
+				else
+					writer.write_overlap(a, b, "overlap");
+				return;
 			}
 
-			return nullptr;
+			return;
 		}
 };
 
-class BuildingOverlap : public AreaOverlapCompare {
+class AmenityIntersect : public AreaCompare {
 	public:
-		virtual bool WantA(Area *a) const {
-			if (a->osm_type == AREA_BUILDING)
-				return true;
-			return false;
-		}
+		AmenityIntersect(SpatiaLiteWriter& writer) : AreaCompare(writer) {
+			writer.addAreaOverlapLayer("hierarchy");
+		};
 
-		virtual bool WantB(Area *a) const {
-			return WantA(a);
-		}
-
-		virtual const char *Overlaps(Area *a, Area *b) {
-			/*
-			 * Overlapping ourselves or an id smaller than ours
-			 * We only want to check a -> b not b -> a again as they
-			 * will overlap too anyway.
-			 */
-			if (a->id >= b->id)
-				return nullptr;
-
-			if (a->osm_type != AREA_BUILDING ||
-				b->osm_type != AREA_BUILDING)
-				return nullptr;
-
-			/* OSM Layer - If a roof is layer=1 dont overlap */
-			if (a->osm_layer != b->osm_layer)
-				return nullptr;
-
-			if (a->overlaps(b))
-				return "building";
-
-			return nullptr;
-		}
-};
-
-class AmenityIntersect : public AreaOverlapCompare {
-	public:
 		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_NATURAL)
 				return true;
@@ -149,7 +124,7 @@ class AmenityIntersect : public AreaOverlapCompare {
 			return WantA(a);
 		}
 
-		const char *Overlaps(Area *a, Area *b) const {
+		void Overlaps(Area *a, Area *b) const {
 			/*
 			 * Overlapping ourselves or an id smaller than ours
 			 * We only want to check a -> b not b -> a again as they
@@ -157,7 +132,7 @@ class AmenityIntersect : public AreaOverlapCompare {
 			 */
 			if ((a->id >= b->id) &&
 				(a->osm_type == b->osm_type))
-				return nullptr;
+				return;
 
 			if (DEBUG)
 				std::cout << "Overlaps " << std::endl
@@ -170,24 +145,27 @@ class AmenityIntersect : public AreaOverlapCompare {
 			/* One of them needs to be an AMENITY */
 			if (!((WantA(a) && WantB(b))
 				|| (WantA(b) && WantB(a))))
-				return nullptr;
+				return;
 
 			if (DEBUG)
 				std::cout << "Checking for intersection" << std::endl;
 
 			if (a->intersects(b)) {
 
-				/* Building may be layer - Then ignore */
+				/* if a builing overlaps something - check layers */
 				if (a->osm_type == AREA_BUILDING
-					&& b->osm_type == AREA_BUILDING
-					&& a->osm_layer != b->osm_layer) {
-					return nullptr;
+					|| b->osm_type == AREA_BUILDING) {
+
+					if (a->osm_layer != b->osm_layer) {
+						return;
+					}
 				}
 
-				return "hierarchy";
+				writer.write_overlap(a, b, "hierarchy");
+				return;
 			}
 
-			return nullptr;
+			return;
 		}
 };
 
@@ -195,8 +173,12 @@ class LanduseSize : public AreaProcess {
 	OGRSpatialReference	tSRS;
 
 	public:
-		LanduseSize(void ) {
+		LanduseSize(SpatiaLiteWriter& writer) : AreaProcess(writer) {
 			tSRS.importFromEPSG(31467);
+
+			writer.addAreaLayer("huge");
+			writer.addAreaLayer("suspicious");
+			writer.addAreaLayer("complex");
 		}
 
 		bool WantA(Area *a) const {
@@ -300,7 +282,7 @@ class LanduseSize : public AreaProcess {
 			return complexity;
 		}
 
-		void Process(Area *a, SpatiaLiteWriter& writer) const {
+		void Process(Area *a) const {
 			OGRGeometry	*geom=a->geometry->clone();
 			geom->transformTo((OGRSpatialReference *) &tSRS);
 
@@ -392,16 +374,13 @@ int main(int argc, char* argv[]) {
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
-	LanduseSize		ls;
-	areahandler.foreach(writer, ls);
+	LanduseSize		ls{writer};
+	areahandler.foreach(ls);
 
-	AmenityIntersect	ai;
-	areahandler.processoverlap(writer, ai);
+	AmenityIntersect	ai{writer};
+	areahandler.processoverlap(ai);
 
-	AreaOverlapCompare	luo;
-	areahandler.processoverlap(writer, luo);
-
-	BuildingOverlap		bo;
-	areahandler.processoverlap(writer, bo);
+	AreaOverlapCompare	luo{writer};
+	areahandler.processoverlap(luo);
 
 }
