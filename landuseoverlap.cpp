@@ -339,7 +339,7 @@ public:
 		uint32_t age=(now-modified)/86400;
 
 		std::string s=boost::str(boost::format("%1s last modified %2d days ago") % a->osm_key % age);
-		if (age > 365) {
+		if (age < 365) {
 			writer.writeAreaLayer("buildingold", a, "buildingold", s.c_str());
 		} else {
 			writer.writeAreaLayer("buildingold", a, "buildingoldneedcheck", s.c_str());
