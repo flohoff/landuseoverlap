@@ -2,6 +2,7 @@
 #include <cstdlib>  // for std::exit
 #include <cstring>  // for std::strcmp
 #include <iostream> // for std::cout, std::cerr
+#include <time.h>
 
 // For assembling multipolygons
 #include <osmium/area/assembler.hpp>
@@ -36,6 +37,8 @@ using index_type = osmium::index::map::FlexMem<osmium::unsigned_object_id_type, 
 
 // The location handler always depends on the index type
 using location_handler_type = osmium::handler::NodeLocationsForWays<index_type>;
+
+#define is_building(type) ((type) == AREA_BUILDING || (type) == AREA_BUILDING_OLD)
 
 #define DEBUG 0
 
@@ -114,7 +117,7 @@ class AmenityIntersect : public AreaCompare {
 					return false;
 				return true;
 			}
-			if (a->osm_type == AREA_BUILDING) {
+			if (is_building(a->osm_type)) {
 				return true;
 			}
 			return false;
@@ -153,8 +156,8 @@ class AmenityIntersect : public AreaCompare {
 			if (a->intersects(b)) {
 
 				/* if a builing overlaps something - check layers */
-				if (a->osm_type == AREA_BUILDING
-					|| b->osm_type == AREA_BUILDING) {
+				if (is_building(a->osm_type)
+					|| is_building(b->osm_type)) {
 
 					if (a->osm_layer != b->osm_layer) {
 						return;
@@ -313,6 +316,38 @@ class LanduseSize : public AreaProcess {
 };
 
 
+class BuildingOld : public AreaProcess {
+	time_t		now;
+public:
+	BuildingOld(SpatiaLiteWriter& writer) : AreaProcess(writer) {
+		writer.addAreaLayer("buildingold");
+		now=time(nullptr);
+	}
+
+	bool WantA(Area *a) const {
+		if (a->osm_type == AREA_BUILDING_OLD)
+			return true;
+		return false;
+	}
+
+	bool WantB(Area *a) const {
+		return WantA(a);
+	}
+
+	void Process(Area *a) const {
+		time_t modified=uint32_t(a->osm_timestamp);
+		uint32_t age=(now-modified)/86400;
+
+		std::string s=boost::str(boost::format("%1s last modified %2d days ago") % a->osm_key % age);
+		if (age > 365) {
+			writer.writeAreaLayer("buildingold", a, "buildingold", s.c_str());
+		} else {
+			writer.writeAreaLayer("buildingold", a, "buildingoldneedcheck", s.c_str());
+		}
+	}
+};
+
+
 namespace po = boost::program_options;
 
 int main(int argc, char* argv[]) {
@@ -344,6 +379,9 @@ int main(int argc, char* argv[]) {
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"landuse"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"natural"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"building"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"razed:building"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"removed:building"}});
+	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"demolished:building"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"amenity"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"leisure"}});
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"man_made"}});
@@ -376,6 +414,9 @@ int main(int argc, char* argv[]) {
 
 	LanduseSize		ls{writer};
 	areahandler.foreach(ls);
+
+	BuildingOld		bo{writer};
+	areahandler.foreach(bo);
 
 	AmenityIntersect	ai{writer};
 	areahandler.processoverlap(ai);

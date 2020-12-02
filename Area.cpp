@@ -26,6 +26,15 @@ Area::Area(std::unique_ptr<OGRGeometry> geom, uint8_t otype, const osmium::Area 
 	} else if (taglist.has_key("building")) {
 		osm_key="building";
 		osm_type=AREA_BUILDING;
+	} else if (taglist.has_key("razed:building")) {
+		osm_key="razed:building";
+		osm_type=AREA_BUILDING_OLD;
+	} else if (taglist.has_key("demolished:building")) {
+		osm_key="demolished:building";
+		osm_type=AREA_BUILDING_OLD;
+	} else if (taglist.has_key("removed:building")) {
+		osm_key="removed:building";
+		osm_type=AREA_BUILDING_OLD;
 	} else if (taglist.has_key("amenity")) {
 		osm_key="amenity";
 		osm_type=AREA_AMENITY;
