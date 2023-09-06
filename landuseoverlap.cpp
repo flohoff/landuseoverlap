@@ -103,6 +103,8 @@ class AmenityIntersect : public AreaCompare {
 					return false;
 				if (strcasecmp(a->osm_value, "bay") == 0)
 					return false;
+				if (strcasecmp(a->osm_value, "mountain_range") == 0)
+					return false;
 				return true;
 			}
 			if (a->osm_type == AREA_LANDUSE)
