@@ -7,4 +7,5 @@ compile_commands.json
 Makefile
 !.gitignore
 !.travis.yml
+!.gitlab-ci.yml
 *sqlite
