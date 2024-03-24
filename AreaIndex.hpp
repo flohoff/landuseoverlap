@@ -1,5 +1,5 @@
 #include <osmium/handler.hpp>
-#include <SpatialIndex.h>
+#include <spatialindex/SpatialIndex.h>
 #include <osmium/geom/ogr.hpp>
 
 #include "SpatiaLiteWriter.hpp"
@@ -31,6 +31,6 @@ public:
 	void findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want);
 	void insert(Area *area);
 	void area(const osmium::Area& area);
-	void foreach(AreaProcess& compare);
-	void processoverlap(AreaCompare& compare);
+	unsigned int foreach(AreaProcess& compare);
+	unsigned int processoverlap(AreaCompare& compare);
 };

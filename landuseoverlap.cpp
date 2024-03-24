@@ -2,6 +2,7 @@
 #include <cstdlib>  // for std::exit
 #include <cstring>  // for std::strcmp
 #include <iostream> // for std::cout, std::cerr
+#include <chrono>
 
 // For assembling multipolygons
 #include <osmium/area/assembler.hpp>
@@ -25,6 +26,8 @@
 
 #include <boost/program_options.hpp>
 #include <boost/format.hpp>
+
+#include "ogr_srs_api.h"
 
 #include "SpatiaLiteWriter.hpp"
 #include "Area.hpp"
@@ -172,12 +175,32 @@ class AmenityIntersect : public AreaCompare {
 		}
 };
 
+class CurrentTime {
+	public:
+};
+
+std::ostream& operator<<(std::ostream& out, const CurrentTime& ct) {
+	//std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	const auto now = std::chrono::system_clock::now();
+	const std::chrono::duration<double> tse = now.time_since_epoch();
+	const std::time_t t_c = std::chrono::system_clock::to_time_t(now);
+
+	return out
+		<< std::put_time(std::localtime(&t_c), "%F %T")
+		<< "."
+		<< std::chrono::duration_cast<std::chrono::milliseconds>(tse).count() % 1000;
+}
+
 class LanduseSize : public AreaProcess {
-	OGRSpatialReference	tSRS;
+	OGRSpatialReference		fSRS;
+	OGRSpatialReference		tSRS;
+	OGRCoordinateTransformation	*transformSRS;
 
 	public:
 		LanduseSize(SpatiaLiteWriter& writer) : AreaProcess(writer) {
 			tSRS.importFromEPSG(31467);
+			fSRS.importFromEPSG(4326);
+			transformSRS=OGRCreateCoordinateTransformation(&fSRS, &tSRS);
 
 			writer.addAreaLayer("huge");
 			writer.addAreaLayer("suspicious");
@@ -185,7 +208,7 @@ class LanduseSize : public AreaProcess {
 		}
 
 		bool WantA(Area *a) const {
-			if (a->osm_type == AREA_LANDUSE)
+			if (a->osm_type == AREA_LANDUSE || a->osm_type == AREA_NATURAL)
 				return true;
 			return false;
 		}
@@ -287,7 +310,8 @@ class LanduseSize : public AreaProcess {
 
 		void Process(Area *a) const {
 			OGRGeometry	*geom=a->geometry->clone();
-			geom->transformTo((OGRSpatialReference *) &tSRS);
+			//geom->transformTo((OGRSpatialReference *) &tSRS);
+			geom->transform(transformSRS);
 
 			double complexity=polygon_complexity(geom);
 			if (complexity > 2000) {
@@ -310,7 +334,6 @@ class LanduseSize : public AreaProcess {
 				std::string s=boost::str(boost::format("Large landuse %1$.0fm² > 200000m²") % areasize);
 				writer.writeAreaLayer("huge", a, "huge1", s.c_str());
 			}
-
 			delete(geom);
 		}
 };
@@ -338,6 +361,7 @@ int main(int argc, char* argv[]) {
         }
 
 	AreaIndex	areahandler;
+	CurrentTime	currenttime;
 
 	osmium::io::File input_file{vm["infile"].as<std::string>()};
 
@@ -352,6 +376,8 @@ int main(int argc, char* argv[]) {
 	areafilter.add_rule(true, osmium::TagMatcher{osmium::StringMatcher::equal{"man_made"}});
 	osmium::area::MultipolygonManager<osmium::area::Assembler> areamp_manager{assembler_config, areafilter};
 
+	std::cerr << currenttime << " Reading relations" << std::endl;
+
 	// We read the input file twice. In the first pass, only relations are
 	// read and fed into the multipolygon manager.
 	osmium::relations::read_relations(input_file, areamp_manager);
@@ -360,6 +386,7 @@ int main(int argc, char* argv[]) {
 	location_handler_type location_handler{index};
 	location_handler.ignore_errors();
 
+	std::cerr << currenttime << " Reading polygons" << std::endl;
 	osmium::io::Reader reader{input_file};
 	osmium::apply(reader, location_handler,
 		areahandler,
@@ -368,22 +395,25 @@ int main(int argc, char* argv[]) {
 		})
 	);
 	reader.close();
-	std::cerr << "Pass 2 done\n";
 
-	std::cerr << "Memory:\n";
+	std::cerr << currenttime << " Memory usage after Pass2:" << std::endl;
 	osmium::relations::print_used_memory(std::cerr, areamp_manager.used_memory());
 
 	OGRRegisterAll();
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
+	std::cerr << currenttime << " Running landusesize handler" << std::endl;;
 	LanduseSize		ls{writer};
 	areahandler.foreach(ls);
 
+	std::cerr << currenttime << " Running amenity intersection" << std::endl;;
 	AmenityIntersect	ai{writer};
 	areahandler.processoverlap(ai);
 
+	std::cerr << currenttime << " Running overlap" << std::endl;;
 	AreaOverlapCompare	luo{writer};
 	areahandler.processoverlap(luo);
 
+	std::cerr << currenttime << " Done" << std::endl;;
 }

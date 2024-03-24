@@ -1,5 +1,8 @@
-cmake_minimum_required (VERSION 2.6)
-project (osmium_area_test)
+project (landuseoverlap)
+cmake_minimum_required(VERSION 2.8.12)
+
+INCLUDE(CheckIncludeFiles)
+INCLUDE(CheckLibraryExists)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -29,11 +32,18 @@ endif()
 find_package(Boost 1.55.0 REQUIRED COMPONENTS program_options )
 include_directories(${Boost_INCLUDE_DIRS})
 
-find_package(PkgConfig)
-pkg_check_modules(LSI REQUIRED libspatialindex)
+find_library(SPATIAL_LIBRARY spatialindex)
+find_path(SPATIAL_INCLUDE_DIR spatialindex/SpatialIndex.h)
+if(SPATIAL_LIBRARY AND SPATIAL_INCLUDE_DIR)
+	message(STATUS "SpatialIndex AreaStore backend enabled.")
+endif(SPATIAL_LIBRARY AND SPATIAL_INCLUDE_DIR)
+
+include_directories(${SPATIAL_INCLUDE_DIR})
 
 add_executable(landuseoverlap landuseoverlap.cpp SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
+target_link_libraries(landuseoverlap ${SPATIAL_LIBRARY})
+
 include_directories("${OSMIUM_INCLUDE_DIRS}")
-include_directories(${Boost_INCLUDE_DIRS} ${LSI_INCLUDE_DIRS})
-target_link_libraries(landuseoverlap ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES} ${LSI_LIBRARIES})
+include_directories(${Boost_INCLUDE_DIRS})
+target_link_libraries(landuseoverlap ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES})
 

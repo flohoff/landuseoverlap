@@ -2,7 +2,7 @@
 #include <gdalcpp.hpp>
 #include <osmium/handler.hpp>
 #include <spatialindex/capi/sidx_api.h>
-#include <SpatialIndex.h>
+#include <spatialindex/SpatialIndex.h>
 #include <osmium/geom/ogr.hpp>
 
 #include "Area.hpp"
@@ -87,23 +87,31 @@ void AreaIndex::area(const osmium::Area& area) {
 	}
 }
 
-void AreaIndex::foreach(AreaProcess& compare) {
+unsigned int AreaIndex::foreach(AreaProcess& compare) {
+	unsigned int	numprocessed=0;
+
 	for(auto ma : arealist) {
 		if (!compare.WantA(ma))
 			continue;
 
+		numprocessed++;
 		compare.Process(ma);
 	}
+
+	return numprocessed;
 }
 
-void AreaIndex::processoverlap(AreaCompare& compare) {
+unsigned int AreaIndex::processoverlap(AreaCompare& compare) {
 	std::vector<Area*>	list;
 	list.reserve(100);
+	unsigned int	numprocessed=0;
 
 	for(auto ma : arealist) {
 
 		if (!compare.WantA(ma))
 			continue;
+
+		numprocessed++;
 
 		if (DEBUG)
 			std::cout << "Checking overlap for " << ma->osm_id << std::endl;
@@ -119,4 +127,6 @@ void AreaIndex::processoverlap(AreaCompare& compare) {
 
 		list.clear();
 	}
+
+	return numprocessed;
 }
