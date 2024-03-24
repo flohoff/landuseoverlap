@@ -11,6 +11,7 @@
 #define DEBUG	0
 
 void SpatiaLiteWriter::addAreaOverlapLayer(const char *name) {
+	sqlitelock.lock();
 	gdalcpp::Layer *layer=new gdalcpp::Layer(dataset, name, wkbMultiPolygon);
 
 	layer->add_field("area1_id", OFTString, 20);
@@ -32,9 +33,11 @@ void SpatiaLiteWriter::addAreaOverlapLayer(const char *name) {
 	layer->add_field("style", OFTString, 20);
 
 	layermap[name]=layer;
+	sqlitelock.unlock();
 }
 
 void SpatiaLiteWriter::addAreaLayer(const char *name) {
+	sqlitelock.lock();
 	gdalcpp::Layer *layer=new gdalcpp::Layer(dataset, name, wkbMultiPolygon);
 
 	layer->add_field("area_id", OFTString, 20);
@@ -50,6 +53,7 @@ void SpatiaLiteWriter::addAreaLayer(const char *name) {
 	layer->add_field("style", OFTString, 20);
 
 	layermap[name]=layer;
+	sqlitelock.unlock();
 }
 
 
@@ -58,6 +62,13 @@ SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname) :
 
 	dataset.enable_auto_transactions();
 }
+
+void SpatiaLiteWriter::add_to_layer(gdalcpp::Feature& feature) {
+	sqlitelock.lock();
+	feature.add_to_layer();
+	sqlitelock.unlock();
+}
+
 
 void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, Area *b, std::unique_ptr<OGRGeometry> mpoly, const char *style) {
 	try  {
@@ -81,7 +92,7 @@ void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, 
 
 		feature.set_field("style", style);
 
-		feature.add_to_layer();
+		add_to_layer(feature);
 
 		std::cout
 				<< a->osm_key << " " << a->osm_value << " "
@@ -167,7 +178,7 @@ void SpatiaLiteWriter::writeAreaLayer(const char *layername, Area *a, const char
 
 		feature.set_field("style", style);
 
-		feature.add_to_layer();
+		add_to_layer(feature);
 
 		std::cout
 				<< a->osm_key << " " << a->osm_value << " "

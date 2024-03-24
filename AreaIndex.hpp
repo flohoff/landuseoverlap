@@ -1,3 +1,4 @@
+#include <mutex>
 #include <osmium/handler.hpp>
 #include <spatialindex/SpatialIndex.h>
 #include <osmium/geom/ogr.hpp>
@@ -10,6 +11,7 @@ namespace si = SpatialIndex;
 class AreaIndex : public osmium::handler::Handler{
 	si::ISpatialIndex	*rtree;
 	si::IStorageManager	*sm;
+	std::mutex		areaindexmutex;
 
 	si::id_type index_id;
 	uint32_t const index_capacity = 100;

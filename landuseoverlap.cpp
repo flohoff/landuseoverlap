@@ -314,9 +314,11 @@ class LanduseSize : public AreaProcess {
 			geom->transform(transformSRS);
 
 			double complexity=polygon_complexity(geom);
-			if (complexity > 2000) {
-				std::string s=boost::str(boost::format("Complexity %1$.1f") % complexity);
-				writer.writeAreaLayer("complex", a, "complex", s.c_str());
+			std::string complexstring=boost::str(boost::format("Complexity %1$.1f") % complexity);
+			if (complexity > 6000) {
+				writer.writeAreaLayer("complex", a, "area-red", complexstring.c_str());
+			} else if (complexity > 3000) {
+				writer.writeAreaLayer("complex", a, "area-yellow", complexstring.c_str());
 			}
 
 			float areasize=polygon_area(geom);
@@ -339,9 +341,25 @@ class LanduseSize : public AreaProcess {
 };
 
 
+void landusesize(SpatiaLiteWriter& writer, AreaIndex& areaindex) {
+	LanduseSize		ls{writer};
+	areaindex.foreach(ls);
+}
+
+void amenityintersect(SpatiaLiteWriter& writer, AreaIndex& areaindex) {
+	AmenityIntersect	ai{writer};
+	areaindex.processoverlap(ai);
+}
+
+void overlap(SpatiaLiteWriter& writer, AreaIndex& areaindex) {
+	AreaOverlapCompare	luo{writer};
+	areaindex.processoverlap(luo);
+}
+
 namespace po = boost::program_options;
 
 int main(int argc, char* argv[]) {
+	std::vector<std::thread> threads;
 
 	po::options_description         desc("Allowed options");
 	desc.add_options()
@@ -396,24 +414,21 @@ int main(int argc, char* argv[]) {
 	);
 	reader.close();
 
+
 	std::cerr << currenttime << " Memory usage after Pass2:" << std::endl;
 	osmium::relations::print_used_memory(std::cerr, areamp_manager.used_memory());
 
 	OGRRegisterAll();
+
 	std::string		dbname=vm["dbname"].as<std::string>();
 	SpatiaLiteWriter	writer{dbname};
 
-	std::cerr << currenttime << " Running landusesize handler" << std::endl;;
-	LanduseSize		ls{writer};
-	areahandler.foreach(ls);
+	threads.push_back(std::thread(landusesize, std::ref(writer), std::ref(areahandler)));
+	threads.push_back(std::thread(amenityintersect, std::ref(writer), std::ref(areahandler)));
+	threads.push_back(std::thread(overlap, std::ref(writer), std::ref(areahandler)));
 
-	std::cerr << currenttime << " Running amenity intersection" << std::endl;;
-	AmenityIntersect	ai{writer};
-	areahandler.processoverlap(ai);
-
-	std::cerr << currenttime << " Running overlap" << std::endl;;
-	AreaOverlapCompare	luo{writer};
-	areahandler.processoverlap(luo);
+	for(auto& th : threads)
+		th.join();
 
 	std::cerr << currenttime << " Done" << std::endl;;
 }

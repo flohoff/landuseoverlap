@@ -1,6 +1,7 @@
 #ifndef SPATIALITEWRITER_HPP
 #define SPATIALITEWRITER_HPP
 
+#include <mutex>
 #include <osmium/handler.hpp>
 #include <gdalcpp.hpp>
 #include <osmium/geom/ogr.hpp>
@@ -12,6 +13,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 	osmium::geom::OGRFactory<>	m_factory{};
 
 	std::map<std::string, gdalcpp::Layer*>	layermap;
+	std::mutex	sqlitelock;
 
 	public:
 	SpatiaLiteWriter(std::string &dbname);
@@ -23,6 +25,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 	void writeAreaLayer(const char *layername, Area *a, const char *style, const char *errormsg);
 
 	private:
+	void add_to_layer(gdalcpp::Feature& feature);
 	void writeGeometry(gdalcpp::Layer *layer, Area *a, Area *b, OGRGeometry *geom, const char *style);
 	void writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, Area *b, std::unique_ptr<OGRGeometry> mpoly, const char *style);
 

@@ -60,7 +60,9 @@ AreaIndex::AreaIndex() {
 
 void AreaIndex::findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want) {
 	query_visitor<Area> qvisitor{list, want};
+	areaindexmutex.lock();
 	rtree->intersectsWithQuery(region(area), qvisitor);
+	areaindexmutex.unlock();
 }
 
 void AreaIndex::insert(Area *area) {
