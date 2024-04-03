@@ -97,7 +97,7 @@ class AmenityIntersect : public AreaCompare {
 
 		virtual bool WantA(Area *a) const {
 			if (a->osm_type == AREA_NATURAL) {
-				if (strcasecmp(a->osm_value, "mountain_range") == 0)
+				if (strcasecmp(a->osm_value, "peninsula") == 0)
 					return false;
 				return true;
 			}
