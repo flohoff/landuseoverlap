@@ -99,6 +99,10 @@ class AmenityIntersect : public AreaCompare {
 			if (a->osm_type == AREA_NATURAL) {
 				if (strcasecmp(a->osm_value, "peninsula") == 0)
 					return false;
+				if (strcasecmp(a->osm_value, "isthmus") == 0)
+					return false;
+				if (strcasecmp(a->osm_value, "bay") == 0)
+					return false;
 				return true;
 			}
 			if (a->osm_type == AREA_LANDUSE)
