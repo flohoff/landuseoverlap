@@ -31,16 +31,8 @@ endif()
 find_package(Boost CONFIG 1.70.0 REQUIRED COMPONENTS program_options )
 include_directories(${Boost_INCLUDE_DIRS})
 
-find_library(SPATIAL_LIBRARY spatialindex)
-find_path(SPATIAL_INCLUDE_DIR spatialindex/SpatialIndex.h)
-if(SPATIAL_LIBRARY AND SPATIAL_INCLUDE_DIR)
-	message(STATUS "SpatialIndex AreaStore backend enabled.")
-endif(SPATIAL_LIBRARY AND SPATIAL_INCLUDE_DIR)
-
-include_directories(${SPATIAL_INCLUDE_DIR})
-
 add_executable(landuseoverlap landuseoverlap.cpp SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
-target_link_libraries(landuseoverlap ${SPATIAL_LIBRARY})
+target_link_libraries(landuseoverlap ${Boost_LIBRARIES})
 
 include_directories("${OSMIUM_INCLUDE_DIRS}")
 include_directories(${Boost_INCLUDE_DIRS})

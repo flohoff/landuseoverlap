@@ -1,25 +1,22 @@
-#include <mutex>
 #include <osmium/handler.hpp>
-#include <spatialindex/SpatialIndex.h>
-#include <osmium/geom/ogr.hpp>
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point.hpp>
+#include <boost/geometry/geometries/box.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 #include "SpatiaLiteWriter.hpp"
 #include "AreaCheck.hpp"
 
-namespace si = SpatialIndex;
+namespace bg	= boost::geometry;
+namespace bgi	= bg::index;
 
 class AreaIndex : public osmium::handler::Handler{
-	si::ISpatialIndex	*rtree;
-	si::IStorageManager	*sm;
-	std::mutex		areaindexmutex;
+	typedef bg::model::point<double, 2, bg::cs::cartesian>	index_point_t;
+	typedef bg::model::box<index_point_t>			index_box_t;
+	typedef std::pair<index_box_t, Area*>			index_value_t;
 
-	si::id_type index_id;
-	uint32_t const index_capacity = 256;
-	uint32_t const leaf_capacity = 256;
-	uint32_t const dimension = 2;
-	double const fill_factor = 0.9;
+	bgi::rtree<index_value_t, bgi::rstar<256, 64>>	rtree;
 
-	typedef std::array<double, 2> coord_array_t;
 	int64_t		id=0;
 
 	osmium::geom::OGRFactory<>	m_factory;
@@ -27,7 +24,7 @@ class AreaIndex : public osmium::handler::Handler{
 public:
 	std::vector<Area*>			arealist;
 private:
-	si::Region region(Area *area);
+	index_box_t region(Area *area);
 public:
 	AreaIndex();
 	void findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want);

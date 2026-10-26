@@ -1,8 +1,5 @@
 
-#include <gdalcpp.hpp>
 #include <osmium/handler.hpp>
-#include <spatialindex/capi/sidx_api.h>
-#include <spatialindex/SpatialIndex.h>
 #include <osmium/geom/ogr.hpp>
 
 #include "Area.hpp"
@@ -12,66 +9,33 @@
 
 #define DEBUG	0
 
-namespace si = SpatialIndex;
-
-template <typename AT>
-class query_visitor : public si::IVisitor {
-	std::vector<AT*>	*list;
-	AreaWant&		want;
-
-	public:
-
-	query_visitor(std::vector<AT*> *l, AreaWant& want) : list(l), want(want){}
-
-	void visitNode(si::INode const& n) {
-	}
-
-	void visitData(si::IData const& d) {
-		uint64_t	id=d.getIdentifier();
-		if (want.WantB((AT *)id))
-			list->push_back((AT *)id);
-	}
-
-	void visitData(std::vector<si::IData const*>& v) {
-		assert(!v.empty()); (void)v;
-	}
-};
-
-si::Region AreaIndex::region(Area *area) {
+AreaIndex::index_box_t AreaIndex::region(Area *area) {
 	OGREnvelope	env;
 	area->envelope(env);
 
-	coord_array_t const p1 = { env.MinX, env.MinY };
-	coord_array_t const p2 = { env.MaxX, env.MaxY };
-
-	si::Region region(
-		si::Point(p1.data(), p1.size()),
-		si::Point(p2.data(), p2.size()));
-
-	return region;
+	return index_box_t(
+		index_point_t(env.MinX, env.MinY),
+		index_point_t(env.MaxX, env.MaxY));
 }
 
 AreaIndex::AreaIndex() {
-	sm=si::StorageManager::createNewMemoryStorageManager();
-	rtree=si::RTree::createNewRTree(*sm, fill_factor, index_capacity, leaf_capacity, dimension, si::RTree::RV_RSTAR, index_id);
-
 	oSRS.importFromEPSG(4326);
 }
 
 void AreaIndex::findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& want) {
-	query_visitor<Area> qvisitor{list, want};
-	areaindexmutex.lock();
-	rtree->intersectsWithQuery(region(area), qvisitor);
-	areaindexmutex.unlock();
+	std::vector<index_value_t>	hits;
+	rtree.query(bgi::intersects(region(area)), std::back_inserter(hits));
+
+	for(auto& v : hits) {
+		if (want.WantB(v.second))
+			list->push_back(v.second);
+	}
 }
 
 void AreaIndex::insert(Area *area) {
-	if (DEBUG)
-		std::cout << "Insert: " << area->id << std::endl;
-	rtree->insertData(0, nullptr, region(area), (uint64_t) area);
+	rtree.insert(index_value_t{region(area), area});
 }
 
-// This callback is called by osmium::apply for each area in the data.
 void AreaIndex::area(const osmium::Area& area) {
 	try {
 		uint8_t		src=area.from_way() ? SRC_WAY : SRC_RELATION;
