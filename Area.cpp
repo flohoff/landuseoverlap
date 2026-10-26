@@ -7,6 +7,38 @@
 
 static uint64_t	globalid=0;
 
+/* Prepared geometry cache: comparisons are made one lhs area at prepared handle */
+namespace {
+	struct CurrentPrepared {
+		Area				*cur=nullptr;
+		OGRPreparedGeometryH		handle=nullptr;
+
+		~CurrentPrepared() {
+			if (handle)
+				OGRDestroyPreparedGeometry(handle);
+		}
+	};
+
+	thread_local CurrentPrepared	t_prepared;
+
+	OGRPreparedGeometryH prepared_for(Area *area) {
+		if (t_prepared.cur==area)
+			return t_prepared.handle;
+
+		if (t_prepared.handle)
+			OGRDestroyPreparedGeometry(t_prepared.handle);
+
+		t_prepared.cur=area;
+		t_prepared.handle=nullptr;
+
+		if (area->geometry && OGRHasPreparedGeometrySupport())
+			t_prepared.handle=OGRCreatePreparedGeometry(
+				reinterpret_cast<OGRGeometryH>(area->geometry));
+
+		return t_prepared.handle;
+	}
+}
+
 Area::~Area(void ) {
 	delete(geometry);
 }
@@ -56,9 +88,15 @@ void Area::envelope(OGREnvelope& env) {
 }
 
 bool Area::overlaps(Area *oa) {
-	return geometry->Overlaps(oa->geometry)
-		|| geometry->Contains(oa->geometry)
-		|| geometry->Within(oa->geometry);
+	/* Use prepared geometry if available from cache */
+	OGRPreparedGeometryH	prepared=prepared_for(this);
+
+	if (prepared)
+		return OGRPreparedGeometryIntersects(
+			prepared,
+			reinterpret_cast<OGRGeometryH>(oa->geometry));
+
+	return geometry->Intersects(oa->geometry);
 }
 
 bool Area::intersects(Area *oa) {
@@ -73,5 +111,3 @@ void Area::dump(void ) {
 	std::cout << " Dump of area id " << id << " from OSM id " << osm_id << " type " << (int) source << std::endl;
 	geometry->dumpReadable(stdout, nullptr, nullptr);
 }
-
-

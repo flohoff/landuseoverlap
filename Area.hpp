@@ -1,6 +1,7 @@
 #ifndef AREA_HPP
 #define AREA_HPP
 
+#include <ogr_api.h>
 #include <gdalcpp.hpp>
 #include <osmium/osm/area.hpp>
 
@@ -21,7 +22,7 @@ enum {
 
 class Area {
 	public:
-	const OGRGeometry			*geometry;
+	OGRGeometry				*geometry;
 	uint8_t					source;
 
 	uint64_t				id;

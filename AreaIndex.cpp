@@ -42,6 +42,8 @@ void AreaIndex::create_rtree() {
 
 	pending.clear();
 	pending.shrink_to_fit();
+
+	std::cerr << "Areas indexed: " << rtree.size() << std::endl;
 }
 
 void AreaIndex::area(const osmium::Area& area) {
