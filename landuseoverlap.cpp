@@ -239,7 +239,7 @@ class LanduseSize : public AreaProcess {
 		}
 
 		double distance(const OGRPoint& a, const OGRPoint& b) const {
-			return a.Distance((OGRGeometry *)&b);
+			return std::hypot(a.getX() - b.getX(), a.getY() - b.getY());
 		}
 
 		double polygon_complexity(const OGRGeometry *geom) const {
