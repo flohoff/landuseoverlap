@@ -1,5 +1,5 @@
-project (landuseoverlap)
 cmake_minimum_required(VERSION 3.18.4)
+project (landuseoverlap)
 
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckLibraryExists)
@@ -11,7 +11,7 @@ endif()
 set(CMAKE_CXX_FLAGS "-Wall -Wextra")
 set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(CheckCXXCompilerFlag)
 	CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
@@ -28,7 +28,7 @@ if(NOT OSMIUM_FOUND)
 	message(WARNING "Libosmium not found!\n")
 endif()
 
-find_package(Boost 1.55.0 REQUIRED COMPONENTS program_options )
+find_package(Boost CONFIG 1.70.0 REQUIRED COMPONENTS program_options )
 include_directories(${Boost_INCLUDE_DIRS})
 
 find_library(SPATIAL_LIBRARY spatialindex)
