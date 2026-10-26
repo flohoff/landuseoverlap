@@ -184,7 +184,7 @@ class CurrentTime {
 };
 
 std::ostream& operator<<(std::ostream& out, const CurrentTime& ct) {
-	//std::time_t t = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	(void) ct;
 	const auto now = std::chrono::system_clock::now();
 	const std::chrono::duration<double> tse = now.time_since_epoch();
 	const std::time_t t_c = std::chrono::system_clock::to_time_t(now);
