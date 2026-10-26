@@ -1,5 +1,5 @@
 project (landuseoverlap)
-cmake_minimum_required(VERSION 2.8.12)
+cmake_minimum_required(VERSION 3.18.4)
 
 INCLUDE(CheckIncludeFiles)
 INCLUDE(CheckLibraryExists)
@@ -13,6 +13,14 @@ set(CMAKE_CXX_FLAGS_DEBUG "-g")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 
 set( CMAKE_EXPORT_COMPILE_COMMANDS ON )
+
+include(CheckCXXCompilerFlag)
+	CHECK_CXX_COMPILER_FLAG("-std=c++17" COMPILER_SUPPORTS_CXX17)
+if(COMPILER_SUPPORTS_CXX17)
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17")
+else()
+	message(STATUS "The compiler ${CMAKE_CXX_COMPILER} has no C++17 support. Please use a different C++ compiler.")
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 find_package(Osmium REQUIRED COMPONENTS < pbf io gdal >)
