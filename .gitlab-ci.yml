@@ -1,5 +1,5 @@
 ---
-buildstable:
+build:trixie:
   stage: build
   image: amd64/debian:trixie
   variables:
