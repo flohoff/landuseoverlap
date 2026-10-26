@@ -33,7 +33,15 @@ void AreaIndex::findoverlapping(Area *area, std::vector<Area*> *list, AreaWant& 
 }
 
 void AreaIndex::insert(Area *area) {
-	rtree.insert(index_value_t{region(area), area});
+	pending.emplace_back(region(area), area);
+}
+
+void AreaIndex::create_rtree() {
+	bgi::rtree<index_value_t, bgi::rstar<256, 64>> loaded{pending.begin(), pending.end()};
+	rtree=std::move(loaded);
+
+	pending.clear();
+	pending.shrink_to_fit();
 }
 
 void AreaIndex::area(const osmium::Area& area) {

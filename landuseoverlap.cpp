@@ -420,6 +420,8 @@ int main(int argc, char* argv[]) {
 	);
 	reader.close();
 
+	/* Push all elements into the rtree */
+	areahandler.create_rtree();
 
 	std::cerr << currenttime << " Memory usage after Pass2:" << std::endl;
 	osmium::relations::print_used_memory(std::cerr, areamp_manager.used_memory());
