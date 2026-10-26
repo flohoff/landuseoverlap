@@ -7,8 +7,10 @@
 #include <osmium/geom/ogr.hpp>
 
 #include "Area.hpp"
+#include "ReportStream.hpp"
 
 class SpatiaLiteWriter : public osmium::handler::Handler {
+	ReportStream&			report;
 	gdalcpp::Dataset		dataset;
 	osmium::geom::OGRFactory<>	m_factory{};
 
@@ -16,7 +18,7 @@ class SpatiaLiteWriter : public osmium::handler::Handler {
 	std::mutex	sqlitelock;
 
 	public:
-	SpatiaLiteWriter(std::string &dbname);
+	SpatiaLiteWriter(std::string &dbname, ReportStream &report);
 
 	void addAreaLayer(const char *name);
 	void addAreaOverlapLayer(const char *name);

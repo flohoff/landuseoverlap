@@ -7,8 +7,14 @@
 #include "Area.hpp"
 #include "SpatiaLiteWriter.hpp"
 #include <iostream>
+#include <mutex>
 
 #define DEBUG	0
+
+/*
+ * Report lines are serialized by the ReportStream owned further up
+ * the call chain; each line is written under that stream's own mutex.
+ */
 
 void SpatiaLiteWriter::addAreaOverlapLayer(const char *name) {
 	sqlitelock.lock();
@@ -57,7 +63,8 @@ void SpatiaLiteWriter::addAreaLayer(const char *name) {
 }
 
 
-SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname) :
+SpatiaLiteWriter::SpatiaLiteWriter(std::string &dbname, ReportStream &report) :
+		report(report),
 		dataset("sqlite", dbname, gdalcpp::SRS{}, {"SPATIALITE=TRUE", "INIT_WITH_EPSG=no"}) {
 
 	dataset.enable_auto_transactions();
@@ -94,16 +101,22 @@ void SpatiaLiteWriter::writeMultiPolygontoLayer(gdalcpp::Layer *layer, Area *a, 
 
 		add_to_layer(feature);
 
-		std::cout
-				<< a->osm_key << " " << a->osm_value << " "
-				<< a->source_string() << " " << a->osm_id << " overlaps "
-				<< b->osm_key << " " << b->osm_value << " "
-				<< b->source_string() << " " << b->osm_id << " "
-				<< "changesets "
-				<< a->osm_changeset << "," <<  b->osm_changeset << " "
-				<< a->osm_timestamp.to_iso() << "," << b->osm_timestamp.to_iso() << " "
-				<< a->osm_user << "," << b->osm_user
-				<< std::endl;
+		/*
+		 * All threads report through this ReportStream (std::cout or
+		 * an output file). The first << takes the stream's mutex and
+		 * the proxy holds it until the statement ends, so concurrent
+		 * lines can not interleave on the stream buffer.
+		 */
+		report
+			<< a->osm_key << " " << a->osm_value << " "
+			<< a->source_string() << " " << a->osm_id << " overlaps "
+			<< b->osm_key << " " << b->osm_value << " "
+			<< b->source_string() << " " << b->osm_id << " "
+			<< "changesets "
+			<< a->osm_changeset << "," <<  b->osm_changeset << " "
+			<< a->osm_timestamp.to_iso() << "," << b->osm_timestamp.to_iso() << " "
+			<< a->osm_user << "," << b->osm_user
+			<< std::endl;
 
 	} catch (gdalcpp::gdal_error) {
 		std::cerr << "gdal_error while creating feature " << std::endl;
@@ -180,11 +193,12 @@ void SpatiaLiteWriter::writeAreaLayer(const char *layername, Area *a, const char
 
 		add_to_layer(feature);
 
-		std::cout
-				<< a->osm_key << " " << a->osm_value << " "
-				<< a->source_string() << " " << a->osm_id
-				<< " error " << errormsg
-				<< std::endl;
+		/* Same line-level serialization as in the feature writer */
+		report
+			<< a->osm_key << " " << a->osm_value << " "
+			<< a->source_string() << " " << a->osm_id
+			<< " error " << errormsg
+			<< std::endl;
 
 	} catch (gdalcpp::gdal_error) {
 		std::cerr << "gdal_error while creating feature " << std::endl;

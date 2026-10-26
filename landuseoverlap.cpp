@@ -2,6 +2,7 @@
 #include <cstdlib>  // for std::exit
 #include <cstring>  // for std::strcmp
 #include <iostream> // for std::cout, std::cerr
+#include <memory>   // for std::make_unique
 #include <chrono>
 
 // For assembling multipolygons
@@ -371,6 +372,7 @@ int main(int argc, char* argv[]) {
 	desc.add_options()
 		("help,h", "produce help message")
 		("infile,i", po::value<std::string>()->required(), "Input file")
+		("outfile,o", po::value<std::string>(), "Write output to this file instead of stdout")
 		("dbname,d", po::value<std::string>()->required(), "Output database name")
 	;
 
@@ -402,6 +404,23 @@ int main(int argc, char* argv[]) {
 
 	std::cerr << currenttime << " Reading relations" << std::endl;
 
+	/*
+	 * Report output: std::cout by default, or an open file when
+	 * -o is given. The stream and the mutex serializing the report
+	 * lines live together in this object, which is handed down to
+	 * the threads through the writer.
+	 */
+	std::unique_ptr<ReportStream>	report;
+	if (vm.count("outfile"))
+		report=std::make_unique<ReportStream>(vm["outfile"].as<std::string>());
+	else
+		report=std::make_unique<ReportStream>();
+	if (!report->valid()) {
+		std::cerr << "Error: cannot open output file "
+			<< vm["outfile"].as<std::string>() << std::endl;
+		return -1;
+	}
+
 	// We read the input file twice. In the first pass, only relations are
 	// read and fed into the multipolygon manager.
 	osmium::relations::read_relations(input_file, areamp_manager);
@@ -429,7 +448,7 @@ int main(int argc, char* argv[]) {
 	OGRRegisterAll();
 
 	std::string		dbname=vm["dbname"].as<std::string>();
-	SpatiaLiteWriter	writer{dbname};
+	SpatiaLiteWriter	writer{dbname, *report};
 
 	threads.push_back(std::thread(landusesize, std::ref(writer), std::ref(areahandler)));
 	threads.push_back(std::thread(amenityintersect, std::ref(writer), std::ref(areahandler)));
