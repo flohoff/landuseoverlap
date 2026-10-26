@@ -45,7 +45,6 @@ void AreaIndex::area(const osmium::Area& area) {
 		Area	*a=new Area{std::move(geom), src, area};
 
 		insert(a);
-		arealist.push_back(a);
 	} catch (const osmium::geometry_error& e) {
 		std::cerr << "GEOMETRY ERROR: " << e.what() << "\n";
 	} catch (const osmium::invalid_location& e) {
@@ -56,7 +55,9 @@ void AreaIndex::area(const osmium::Area& area) {
 unsigned int AreaIndex::foreach(AreaProcess& compare) {
 	unsigned int	numprocessed=0;
 
-	for(auto ma : arealist) {
+	for(auto it=rtree.begin(); it!=rtree.end(); ++it) {
+		Area	*ma=it->second;
+
 		if (!compare.WantA(ma))
 			continue;
 
@@ -72,7 +73,8 @@ unsigned int AreaIndex::processoverlap(AreaCompare& compare) {
 	list.reserve(100);
 	unsigned int	numprocessed=0;
 
-	for(auto ma : arealist) {
+	for(auto it=rtree.begin(); it!=rtree.end(); ++it) {
+		Area	*ma=it->second;
 
 		if (!compare.WantA(ma))
 			continue;
