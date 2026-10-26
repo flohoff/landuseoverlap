@@ -29,8 +29,8 @@ class Area {
 	uint8_t					osm_type;
 	int					osm_layer=0;
 	osmium::object_id_type			osm_id;
-	std::string				osm_user;
 	osmium::object_id_type			osm_changeset;
+	std::string				osm_user;
 	osmium::Timestamp			osm_timestamp;
 	const char				*osm_key;
 	const char				*osm_value;
