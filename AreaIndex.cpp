@@ -53,7 +53,7 @@ si::Region AreaIndex::region(Area *area) {
 
 AreaIndex::AreaIndex() {
 	sm=si::StorageManager::createNewMemoryStorageManager();
-	rtree=si::RTree::createNewRTree(*sm, fill_factor, index_capacity, leaf_capacity, dimension, si::RTree::RV_LINEAR, index_id);
+	rtree=si::RTree::createNewRTree(*sm, fill_factor, index_capacity, leaf_capacity, dimension, si::RTree::RV_RSTAR, index_id);
 
 	oSRS.importFromEPSG(4326);
 }

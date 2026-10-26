@@ -14,10 +14,10 @@ class AreaIndex : public osmium::handler::Handler{
 	std::mutex		areaindexmutex;
 
 	si::id_type index_id;
-	uint32_t const index_capacity = 100;
-	uint32_t const leaf_capacity = 100;
+	uint32_t const index_capacity = 256;
+	uint32_t const leaf_capacity = 256;
 	uint32_t const dimension = 2;
-	double const fill_factor = 0.5;
+	double const fill_factor = 0.9;
 
 	typedef std::array<double, 2> coord_array_t;
 	int64_t		id=0;
