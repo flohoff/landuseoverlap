@@ -87,8 +87,7 @@ void Area::envelope(OGREnvelope& env) {
 	geometry->getEnvelope(&env);
 }
 
-bool Area::overlaps(Area *oa) {
-	/* Use prepared geometry if available from cache */
+bool Area::intersects(Area *oa) {
 	OGRPreparedGeometryH	prepared=prepared_for(this);
 
 	if (prepared)
@@ -99,7 +98,7 @@ bool Area::overlaps(Area *oa) {
 	return geometry->Intersects(oa->geometry);
 }
 
-bool Area::intersects(Area *oa) {
+bool Area::overlaps(Area *oa) {
 	return geometry->Overlaps(oa->geometry);
 }
 

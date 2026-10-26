@@ -77,7 +77,7 @@ class AreaOverlapCompare : public AreaCompare {
 				&& b->osm_type != AREA_NATURAL)
 				return;
 
-			if (a->overlaps(b)) {
+			if (a->intersects(b)) {
 				if (a->osm_type == AREA_NATURAL || b->osm_type == AREA_NATURAL)
 					writer.write_overlap(a, b, "natural");
 				else
@@ -162,7 +162,7 @@ class AmenityIntersect : public AreaCompare {
 			if (DEBUG)
 				std::cout << "Checking for intersection" << std::endl;
 
-			if (a->intersects(b)) {
+			if (a->overlaps(b)) {
 
 				/* if a builing overlaps something - check layers */
 				if (a->osm_type == AREA_BUILDING

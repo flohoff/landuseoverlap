@@ -40,8 +40,8 @@ class Area {
 	~Area();
 	Area(std::unique_ptr<OGRGeometry> geom, uint8_t otype, const osmium::Area &area);
 	void envelope(OGREnvelope& env);
-	bool overlaps(Area *oa);
 	bool intersects(Area *oa);
+	bool overlaps(Area *oa);
 	const char *source_string(void);
 	void dump(void );
 };
