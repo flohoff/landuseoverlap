@@ -1,4 +1,8 @@
 ---
+variables:
+  LIBOSMIUM_STABLE_VERSION: v2.23.1
+  PROTOZERO_STABLE_VERSION: v1.8.2
+
 build:trixie:
   stage: build
   image: amd64/debian:trixie
@@ -8,8 +12,8 @@ build:trixie:
     GIT_BASE: https://gitlab-ci-token:${CI_JOB_TOKEN}@gl.zz.de
   script:
     - apt-get update && apt-get -fuy install git
-    - git clone ${GIT_BASE}/mirror/libosmium && git -C libosmium checkout -b build 1bb69ec6233b2d065196100b27b9655529d9ad5a
-    - git clone ${GIT_BASE}/mirror/protozero && git -C protozero checkout -b build 5ffe45b718ad14b28a0a7b4044d60fcc0ddba012
+    - git clone ${GIT_BASE}/mirror/osmcode/libosmium && git -C libosmium checkout -b build $LIBOSMIUM_STABLE_VERSION
+    - git clone ${GIT_BASE}/mirror/protozero && git -C protozero checkout -b build $PROTOZERO_STABLE_VERSION
     - apt-get update
     - apt-get install -fuy build-essential cmake cmake-data libboost-all-dev libgdal-dev libbz2-dev libexpat1-dev libsparsehash-dev libspatialindex-dev
     - mkdir build
