@@ -3,9 +3,9 @@ stages:
   - build
   - test
 
-build:trixie:
+build:
   stage: build
-  image: amd64/debian:trixie
+  image: amd64/debian:$release
   variables:
     DEBIAN_FRONTEND: "noninteractive"
     GIT_BASE: https://gitlab-ci-token:${CI_JOB_TOKEN}@gl.zz.de
@@ -19,6 +19,11 @@ build:trixie:
     - mkdir build
     - ( cd build ; cmake .. )
     - make -C build
+  parallel:
+    matrix:
+      - release: trixie
+      - release: forky
+      - release: sid
 
 test:trixie:
   stage: test
