@@ -1,4 +1,8 @@
 ---
+stages:
+  - build
+  - test
+
 build:trixie:
   stage: build
   image: amd64/debian:trixie
@@ -19,7 +23,6 @@ build:trixie:
 test:trixie:
   stage: test
   image: amd64/debian:trixie
-  needs: []
   variables:
     DEBIAN_FRONTEND: "noninteractive"
     GIT_BASE: https://gitlab-ci-token:${CI_JOB_TOKEN}@gl.zz.de
