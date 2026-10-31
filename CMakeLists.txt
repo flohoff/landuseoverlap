@@ -31,10 +31,22 @@ endif()
 find_package(Boost CONFIG 1.70.0 REQUIRED COMPONENTS program_options )
 include_directories(${Boost_INCLUDE_DIRS})
 
-add_executable(landuseoverlap landuseoverlap.cpp SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
-target_link_libraries(landuseoverlap ${Boost_LIBRARIES})
-
 include_directories("${OSMIUM_INCLUDE_DIRS}")
 include_directories(${Boost_INCLUDE_DIRS})
-target_link_libraries(landuseoverlap ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES})
+
+add_library(overlapcore STATIC SpatiaLiteWriter.cpp Area.cpp AreaIndex.cpp)
+target_link_libraries(overlapcore ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES})
+
+add_executable(landuseoverlap landuseoverlap.cpp)
+target_link_libraries(landuseoverlap overlapcore ${OSMIUM_LIBRARIES} ${Boost_LIBRARIES})
+
+# Tests: cmake -DBUILD_TESTING=ON; make check
+option(BUILD_TESTING "Build unit tests" OFF)
+option(ENABLE_COVERAGE "Build with gcov coverage (GCC/Clang)" OFF)
+option(ENABLE_MUTATION "Build with Mull mutation instrumentation (clang)" OFF)
+
+if(BUILD_TESTING)
+	enable_testing()
+	add_subdirectory(tests)
+endif()
 

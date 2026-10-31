@@ -54,3 +54,13 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <https://gnu.org>.
 
+
+## Tests
+
+Out-of-tree build (needs Catch2 v3, gcovr; clang + Mull for mutation):
+
+    cmake -S . -B build-test -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON
+    make -C build-test check coverage      # report: build-test/coverage/index.html
+
+    CXX=clang++ cmake -S . -B build-mut -DBUILD_TESTING=ON -DENABLE_MUTATION=ON
+    make -C build-mut mutation             # report: build-mut/mutation/

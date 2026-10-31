@@ -1,8 +1,4 @@
 ---
-variables:
-  LIBOSMIUM_STABLE_VERSION: v2.23.1
-  PROTOZERO_STABLE_VERSION: v1.8.2
-
 build:trixie:
   stage: build
   image: amd64/debian:trixie
@@ -10,12 +6,43 @@ build:trixie:
     DEBIAN_FRONTEND: "noninteractive"
     GIT_BASE: https://gitlab-ci-token:${CI_JOB_TOKEN}@gl.zz.de
   script:
-    - apt-get update && apt-get -fuy install git
-    - git clone ${GIT_BASE}/mirror/osmcode/libosmium && git -C libosmium checkout -b build $LIBOSMIUM_STABLE_VERSION
-    - git clone ${GIT_BASE}/mirror/protozero && git -C protozero checkout -b build $PROTOZERO_STABLE_VERSION
     - apt-get update
-    - apt-get install -fuy build-essential cmake cmake-data libboost-all-dev libgdal-dev libbz2-dev libexpat1-dev libsparsehash-dev libspatialindex-dev
+    - apt-get install --no-install-suggests --no-install-recommends -fuy
+      build-essential cmake cmake-data libboost-program-options-dev
+      zlib1g-dev libbz2-dev libexpat1-dev liblz4-dev libosmium2-dev
+      libprotozero-dev nlohmann-json3-dev libspatialite-dev
+      libsqlite3-mod-spatialite catch2 gcovr
     - mkdir build
     - ( cd build ; cmake .. )
     - make -C build
 
+test:trixie:
+  stage: test
+  image: amd64/debian:trixie
+  needs: []
+  variables:
+    DEBIAN_FRONTEND: "noninteractive"
+    GIT_BASE: https://gitlab-ci-token:${CI_JOB_TOKEN}@gl.zz.de
+  script:
+    - apt-get update
+    - apt-get install --no-install-suggests --no-install-recommends -fuy
+      build-essential cmake cmake-data libboost-program-options-dev
+      zlib1g-dev libbz2-dev libexpat1-dev liblz4-dev libosmium2-dev
+      libprotozero-dev nlohmann-json3-dev libspatialite-dev
+      libsqlite3-mod-spatialite catch2 gcovr
+    - cmake -S . -B build-test
+      -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
+    - make -C build-test -j$(nproc) unittests
+    - build-test/tests/unittests -r JUnit::out=build-test/junit.xml -r console
+    - make -C build-test coverage
+  coverage: '/^lines: (\d+\.\d+)%/'
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - build-test/coverage/
+    reports:
+      junit: build-test/junit.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: build-test/coverage/cobertura.xml
