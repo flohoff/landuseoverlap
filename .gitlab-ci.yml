@@ -15,7 +15,7 @@ build:trixie:
       build-essential cmake cmake-data libboost-program-options-dev
       zlib1g-dev libbz2-dev libexpat1-dev liblz4-dev libosmium2-dev
       libprotozero-dev nlohmann-json3-dev libspatialite-dev
-      libsqlite3-mod-spatialite catch2 gcovr
+      libsqlite3-mod-spatialite libgdal-dev catch2 gcovr
     - mkdir build
     - ( cd build ; cmake .. )
     - make -C build
@@ -32,7 +32,7 @@ test:trixie:
       build-essential cmake cmake-data libboost-program-options-dev
       zlib1g-dev libbz2-dev libexpat1-dev liblz4-dev libosmium2-dev
       libprotozero-dev nlohmann-json3-dev libspatialite-dev
-      libsqlite3-mod-spatialite catch2 gcovr
+      libsqlite3-mod-spatialite libgdal-dev catch2 gcovr
     - cmake -S . -B build-test
       -DBUILD_TESTING=ON -DENABLE_COVERAGE=ON -DCMAKE_BUILD_TYPE=Debug
     - make -C build-test -j$(nproc) unittests
